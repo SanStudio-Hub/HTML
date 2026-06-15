@@ -155,13 +155,18 @@
             <h2 id="page-title" class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">Dashboard Overview</h2>
             
             <div class="flex items-center gap-4">
-                <div class="glass px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 border-slate-700">
+                <div class="glass px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 border-slate-700 tooltip relative group cursor-pointer" onclick="requestNotificationPermission()">
                     <i class="ph ph-clock text-accent"></i>
                     <span id="current-time">10:00 AM</span>
+                    <span class="text-xs text-slate-400 ml-1">IST</span>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded shadow-lg text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        Click to enable browser notifications
+                    </div>
                 </div>
                 <button class="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center transition border-slate-700 relative">
                     <i class="ph ph-bell text-xl"></i>
-                    <span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full animate-pulse"></span>
+                    <span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full animate-pulse" id="notification-dot"></span>
                 </button>
             </div>
         </header>
@@ -486,43 +491,56 @@
             { name: 'FB-ALP Astrology', platform: 'FB', priority: 'Normal', daily: 2, icon: 'facebook-logo' },
             { name: 'FB-Vakkuyogi', platform: 'FB', priority: 'Normal', daily: 2, icon: 'facebook-logo' },
             { name: 'alp astrology official', platform: 'IG', priority: 'Normal', daily: 2, icon: 'instagram-logo' },
-            { name: 'ALP Sasti tv', platform: 'IG', priority: 'Normal', daily: 2, icon: 'instagram-logo' },
             { name: 'TELEGRAM - ALP Astrology', platform: 'Telegram', priority: 'Normal', daily: 2, icon: 'telegram-logo' },
             { name: 'BLOGGER - ALP Astrology', platform: 'Blogger', priority: 'Normal', daily: 2, icon: 'article' }
         ];
 
+        // Advanced Timeline with Parsed IST Times (24hr format) for Logic
         const TIMELINE_SCHEDULE = [
             {
+                startH: 10, startM: 0, endH: 11, endM: 30,
                 time: '10:00 AM - 11:30 AM', title: '🔥 Priority 1: Morning High-Impact',
                 desc: 'Start the day by posting to our highest priority accounts.', suffix: 'Post 1 (Morning)',
                 accounts: ['IG - pm_vlogs.offical', 'SHARECHAT ALP Astrology', 'Threads ALP Astrology', 'SASTI TV', 'SIDDHAR BOOMI', 'Kandathum Kettathum']
             },
             {
+                startH: 11, startM: 30, endH: 13, endM: 0,
                 time: '11:30 AM - 01:00 PM', title: '📱 Priority 2: Standard Morning Posts',
                 desc: 'Complete all standard updates for the morning session.', suffix: 'Post 1 (Mid-Day)',
-                accounts: ['FB- வாக்கு யோகி', 'FB- ALP SASTI TV', 'FB-அட்சய லக்ன பத்ததி ஜோதிடம்', 'FB-நம் ஜோதிடம்', 'FB-ALP Astrology', 'FB-Vakkuyogi', 'alp astrology official', 'ALP Sasti tv', 'TELEGRAM - ALP Astrology', 'BLOGGER - ALP Astrology']
+                accounts: ['FB- வாக்கு யோகி', 'FB- ALP SASTI TV', 'FB-அட்சய லக்ன பத்ததி ஜோதிடம்', 'FB-நம் ஜோதிடம்', 'FB-ALP Astrology', 'FB-Vakkuyogi', 'alp astrology official', 'TELEGRAM - ALP Astrology', 'BLOGGER - ALP Astrology']
             },
             {
+                startH: 13, startM: 0, endH: 14, endM: 0,
                 time: '01:00 PM - 02:00 PM', title: '🍱 Lunch Break', desc: 'Rest and recharge.', suffix: '', accounts: [], isBreak: true
             },
             {
+                startH: 14, startM: 0, endH: 15, endM: 30,
                 time: '02:00 PM - 03:30 PM', title: '🔥 Priority 3: Afternoon High-Impact',
                 desc: 'Second post for high priority channels.', suffix: 'Post 2 (Afternoon)',
                 accounts: ['IG - pm_vlogs.offical', 'SHARECHAT ALP Astrology', 'Threads ALP Astrology', 'SASTI TV', 'SIDDHAR BOOMI', 'Kandathum Kettathum']
             },
             {
+                startH: 15, startM: 30, endH: 17, endM: 0,
                 time: '03:30 PM - 05:00 PM', title: '📱 Priority 4: Standard Afternoon Posts',
                 desc: 'Second post for Facebook and standard updates.', suffix: 'Post 2 (Evening)',
-                accounts: ['FB- வாக்கு யோகி', 'FB- ALP SASTI TV', 'FB-அட்சய லக்ன பத்ததி ஜோதிடம்', 'FB-நம் ஜோதிடம்', 'FB-ALP Astrology', 'FB-Vakkuyogi', 'alp astrology official', 'ALP Sasti tv', 'TELEGRAM - ALP Astrology', 'BLOGGER - ALP Astrology']
+                accounts: ['FB- வாக்கு யோகி', 'FB- ALP SASTI TV', 'FB-அட்சய லக்ன பத்ததி ஜோதிடம்', 'FB-நம் ஜோதிடம்', 'FB-ALP Astrology', 'FB-Vakkuyogi', 'alp astrology official', 'TELEGRAM - ALP Astrology', 'BLOGGER - ALP Astrology']
             },
             {
+                startH: 17, startM: 0, endH: 18, endM: 0,
                 time: '05:00 PM - 06:00 PM', title: '🚀 Priority 5: Final Wrap-up',
                 desc: 'Third and final post for our High Priority viral accounts.', suffix: 'Post 3 (Wrap-up)',
                 accounts: ['IG - pm_vlogs.offical', 'SHARECHAT ALP Astrology', 'Threads ALP Astrology']
             }
         ];
 
-        // Local Storage Init
+        // Time Helpers (Strictly IST)
+        function getISTDateObj() {
+            let d = new Date();
+            let utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+            return new Date(utc + (3600000 * 5.5)); // IST is UTC +5:30
+        }
+
+        // --- Local Storage Management ---
         function loadData() {
             const storedTasks = localStorage.getItem('santhosh_tasks');
             if (storedTasks) window.appState.tasks = JSON.parse(storedTasks);
@@ -530,11 +548,19 @@
             const storedChecklists = localStorage.getItem('santhosh_checklists');
             if (storedChecklists) window.appState.checklists = JSON.parse(storedChecklists);
             
-            renderUI();
-        }
+            // Reset daily alerts history if it's a new day
+            const storedAlerts = localStorage.getItem('santhosh_alerts');
+            if (storedAlerts) {
+                const alertsData = JSON.parse(storedAlerts);
+                if (alertsData.date === new Date().toISOString().split('T')[0]) {
+                    window.appState.alertsTriggered = alertsData.triggered;
+                } else {
+                    window.appState.alertsTriggered = {};
+                }
+            } else {
+                window.appState.alertsTriggered = {};
+            }
 
-        function saveData() {
-            localStorage.setItem('santhosh_tasks', JSON.stringify(window.appState.tasks));
             renderUI();
         }
 
@@ -672,13 +698,33 @@
             const dayChecks = window.appState.checklists[date] || {};
             let html = '<div class="relative border-l border-slate-700 ml-4 md:ml-6 space-y-8 pb-10 mt-4">';
             
-            TIMELINE_SCHEDULE.forEach(slot => {
+            const now = getISTDateObj();
+            const currentMins = (now.getHours() * 60) + now.getMinutes();
+
+            TIMELINE_SCHEDULE.forEach((slot, index) => {
+                const startMins = (slot.startH * 60) + slot.startM;
+                const endMins = (slot.endH * 60) + slot.endM;
+                
+                // Determine if this slot is currently active or upcoming
+                let isActive = currentMins >= startMins && currentMins < endMins;
+                let isPast = currentMins >= endMins;
+                
+                let highlightClass = isActive ? 'border border-primary shadow-[0_0_15px_rgba(99,102,241,0.2)]' : '';
+                let dotClass = isActive ? 'bg-primary animate-pulse' : (isPast ? 'bg-slate-500' : 'bg-slate-700');
+                
+                let statusBadge = '';
+                if (isActive) statusBadge = '<span class="px-2 py-0.5 bg-primary text-white text-[10px] rounded uppercase font-bold ml-2 tracking-wider">Active Now</span>';
+                else if (!isPast) statusBadge = '<span class="px-2 py-0.5 bg-slate-700 text-slate-300 text-[10px] rounded uppercase font-bold ml-2 tracking-wider">Upcoming</span>';
+
                 html += `
                 <div class="relative pl-8">
-                    <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full ${slot.isBreak ? 'bg-slate-600' : 'bg-primary'} border-4 border-[#0b1120]"></div>
-                    <div class="glass-card p-5 ${slot.isBreak ? 'opacity-60 bg-slate-800/20' : ''}">
+                    <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full ${dotClass} border-4 border-[#0b1120] transition-colors"></div>
+                    <div class="glass-card p-5 ${slot.isBreak ? 'opacity-60 bg-slate-800/20' : ''} ${highlightClass} transition-all">
                         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 gap-2">
-                            <div><h3 class="font-bold text-lg text-white">${slot.title}</h3><p class="text-sm text-slate-400 mt-1">${slot.desc}</p></div>
+                            <div>
+                                <h3 class="font-bold text-lg text-white flex items-center">${slot.title} ${statusBadge}</h3>
+                                <p class="text-sm text-slate-400 mt-1">${slot.desc}</p>
+                            </div>
                             <span class="inline-block px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-accent whitespace-nowrap"><i class="ph ph-clock"></i> ${slot.time}</span>
                         </div>`;
                 
@@ -774,14 +820,116 @@
         }
 
         window.showToast = function(msg, type = "success") {
-            const c = document.getElementById('toast-container'), t = document.createElement('div');
-            t.className = `toast ${type}`;
-            t.innerHTML = `<i class="ph-fill ${type === 'success' ? 'ph-check-circle' : 'ph-info'} text-xl"></i> <span>${msg}</span>`;
-            c.appendChild(t); setTimeout(() => t.remove(), 3500);
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'ph-check-circle' : type === 'error' ? 'ph-warning-circle' : 'ph-info';
+            toast.innerHTML = `<i class="ph-fill ${icon} text-xl"></i> <span>${msg}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                if(toast.parentElement) toast.parentElement.removeChild(toast);
+            }, 5000);
         }
 
+        // --- Notifications Engine & Real-Time Sync ---
+        
+        window.requestNotificationPermission = function() {
+            if (!("Notification" in window)) {
+                showToast("Browser does not support notifications", "warning");
+                return;
+            }
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") showToast("Alerts enabled successfully!", "success");
+            });
+        }
+
+        function triggerNativeAlert(title, body, type="info") {
+            // Toast in App
+            showToast(`${title}: ${body}`, type);
+            // OS Level Notification
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification(title, { body: body, icon: "https://api.dicebear.com/7.x/avataaars/svg?seed=Santhosh" });
+            }
+        }
+
+        function checkTimelineAlerts() {
+            const now = getISTDateObj();
+            const currentMins = (now.getHours() * 60) + now.getMinutes();
+            const dateStr = new Date().toISOString().split('T')[0];
+            const dayChecks = window.appState.checklists[dateStr] || {};
+
+            TIMELINE_SCHEDULE.forEach((slot, index) => {
+                const startMins = (slot.startH * 60) + slot.startM;
+                const endMins = (slot.endH * 60) + slot.endM;
+                
+                // Alert 1: Upcoming Task Alert (10 mins before start)
+                if (startMins - currentMins === 10 && !window.appState.alertsTriggered[`${index}_upcoming`]) {
+                    triggerNativeAlert("Upcoming Schedule", `${slot.title} starts in 10 minutes. Prepare your content!`, "info");
+                    window.appState.alertsTriggered[`${index}_upcoming`] = true;
+                }
+
+                // Alert 2: Slot Active (At exactly start time)
+                if (currentMins === startMins && !window.appState.alertsTriggered[`${index}_start`]) {
+                    triggerNativeAlert("Time to Post", `Action required: ${slot.title} is now active.`, "warning");
+                    window.appState.alertsTriggered[`${index}_start`] = true;
+                }
+
+                // Alert 3: Overdue / Ending soon (15 mins before end)
+                if (endMins - currentMins === 15 && !slot.isBreak && !window.appState.alertsTriggered[`${index}_overdue`]) {
+                    // Check if all tasks for this slot are checked
+                    let incompleteCount = 0;
+                    slot.accounts.forEach(acc => {
+                        if (!dayChecks[`${acc} - ${slot.suffix}`]) incompleteCount++;
+                    });
+
+                    if (incompleteCount > 0) {
+                        triggerNativeAlert("Tasks Pending", `${incompleteCount} accounts pending for ${slot.time} slot! Hurry up!`, "error");
+                    }
+                    window.appState.alertsTriggered[`${index}_overdue`] = true;
+                }
+            });
+
+            // Save alert state so we don't spam on refresh
+            localStorage.setItem('santhosh_alerts', JSON.stringify({
+                date: dateStr,
+                triggered: window.appState.alertsTriggered
+            }));
+        }
+
+        function updateClock() {
+            // Update UI Clock explicitly in IST timezone
+            const timeString = new Date().toLocaleTimeString('en-US', { 
+                timeZone: 'Asia/Kolkata', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            document.getElementById('current-time').innerText = timeString;
+
+            // Re-render checklist specifically if we crossed a minute boundary to update Highlights
+            const now = getISTDateObj();
+            if (now.getSeconds() === 0 && document.getElementById('view-checklist').classList.contains('active')) {
+                updateChecklistView(); 
+            }
+        }
+
+        // Startup Boot
         document.addEventListener('DOMContentLoaded', () => {
-            loadData();
+            loadData(); // Load local storage
+            
+            // Ask for permissions subtly
+            if ("Notification" in window && Notification.permission === "default") {
+                // We show a tooltip on the clock to encourage clicking, but don't force popup immediately
+            }
+
+            // Sync Clock Immediately
+            updateClock();
+            
+            // Start real-time loops
+            setInterval(updateClock, 1000); // Clock updates every second
+            setInterval(checkTimelineAlerts, 60000); // Check alerts every minute
+            
             // Highlight today in timetable
             document.querySelectorAll('#timetable-body tr').forEach(row => {
                 if (parseInt(row.getAttribute('data-day')) === new Date().getDay()) {
@@ -790,6 +938,7 @@
                 }
             });
         });
+
     </script>
 </body>
 </html>
