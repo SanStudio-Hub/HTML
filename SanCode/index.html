@@ -5719,12 +5719,46 @@ or paste phone numbers..." class="w-full bg-vs-editor border border-vs-border te
                             <button class="wae-copy-btn" onclick="navigator.clipboard.writeText('${copyHtml}'); showToast('HTML copied!','success');">${copyHtmlLabel}</button>
                             <button class="wae-copy-btn" onclick="navigator.clipboard.writeText('![${escapeHtml(a.name)}](${a.url})'); showToast('MD copied!','success');">Copy MD</button>
                             <button class="wae-copy-btn" onclick="navigator.clipboard.writeText('background-image: url(\'${a.url.replace(/'/g, '\\\'')}\')'); showToast('CSS copied!','success');">Copy CSS bg</button>
+                            <button class="wae-copy-btn" style="grid-column: 1 / -1; background: var(--vs-accent); color: white; border-color: var(--vs-accent);" onclick="waeDownloadAsset('${a.url.replace(/'/g, '\\\'')}', '${escapeHtml(a.name).replace(/'/g, '\\\'')}');">
+                                <i class="fa-solid fa-download"></i> Download Asset
+                            </button>
                         </div>
                     </div>
                 </div>
             `;
             lb.classList.add('show');
             lb.addEventListener('click', e => { if (e.target === lb) lb.classList.remove('show'); });
+        }
+
+        function waeDownloadAsset(url, filename) {
+            showToast('Downloading...', 'info');
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response not ok');
+                    return res.blob();
+                })
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename || 'download';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(blobUrl);
+                    showToast(`Downloaded: ${filename}`, 'success');
+                })
+                .catch(err => {
+                    // Fallback if CORS blocks it
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename || 'download';
+                    a.target = '_blank';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    showToast('Opened in new tab (CORS restricted). Right-click -> Save As', 'info');
+                });
         }
 
         function waeExportJson() {
