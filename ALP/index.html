@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALP Astrology Attendance</title>
+<style>
+  /* ALP Astrology theme: midnight indigo + soft gold on warm cream. Mobile first; wider screens get more room. */
+  :root { color-scheme: light; --bg: #f8f5ef; --card: #ffffff; --ink: #231f3d; --muted: #6b6785; --line: #e9e3d6; --indigo: #2d2468; --indigo-deep: #1a1440; --accent: #3a2f7d; --accent-soft: #efecfa;
+    --gold: #c79a2b; --gold-soft: #fbf3dc; --ok: #2e7d5b; --ok-soft: #e6f3ec; --bad: #b8433b; --bad-soft: #fbeceb; --warn: #a86f12; --warn-soft: #fbf1dc;
+    --shadow: 0 1px 2px rgba(35,31,61,.05), 0 10px 28px rgba(35,31,61,.08); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", sans-serif; }
+  .hero { height: 190px; color: #fff; padding: 18px 16px 0; background:
+    radial-gradient(1.5px 1.5px at 12% 28%, rgba(255,255,255,.9) 50%, transparent 52%), radial-gradient(1px 1px at 27% 62%, rgba(255,255,255,.7) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 44% 20%, rgba(255,235,170,.9) 50%, transparent 52%), radial-gradient(1px 1px at 58% 70%, rgba(255,255,255,.6) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 73% 34%, rgba(255,255,255,.85) 50%, transparent 52%), radial-gradient(1px 1px at 88% 58%, rgba(255,235,170,.8) 50%, transparent 52%),
+    radial-gradient(1px 1px at 93% 18%, rgba(255,255,255,.7) 50%, transparent 52%), radial-gradient(120px 90px at 86% 0%, rgba(199,154,43,.28), transparent 70%),
+    linear-gradient(160deg, var(--indigo-deep), var(--indigo) 70%, #46388f); }
+  .hero .brand { max-width: 920px; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--gold); color: var(--gold); display: grid; place-items: center; font-size: 1.2rem; background: rgba(255,255,255,.06); flex: none; }
+  .brand b { display: block; font-size: 1.05rem; letter-spacing: .06em; text-transform: uppercase; }
+  .brand small { display: block; color: #d8d2f5; font-size: .8rem; letter-spacing: .04em; }
+  main { max-width: 920px; margin: -118px auto 0; padding: 0 16px 40px; position: relative; }
+  h1 { font-size: 1.25rem; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  h2::before { content: ""; display: inline-block; width: 4px; height: 1em; border-radius: 2px; background: var(--gold); margin-right: 8px; vertical-align: -.14em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  .login { max-width: 420px; margin: 74px auto 0; padding: 24px; }
+  .login small { display: block; color: var(--muted); margin: 2px 0 6px; }
+  .login input { width: 100%; }
+  .login button { width: 100%; margin-top: 16px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin: 22px 0 18px; color: #fff; }
+  .bar h1 { color: #fff; }
+  .bar .muted { color: #d8d2f5; }
+  .bar button { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.35); min-height: 42px; padding: 8px 14px; }
+  .bar button:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label { display: block; font-size: .85rem; font-weight: 600; color: var(--muted); margin: 12px 0 4px; }
+  label.row { margin: 0; font-weight: 500; color: var(--ink); }
+  textarea { width: 100%; font: inherit; padding: 12px; border: 1px solid #d8d2c4; border-radius: 12px; color: var(--ink); background: #fff; }
+  input, select { font: inherit; padding: 10px 12px; border: 1px solid #d8d2c4; border-radius: 12px; background: #fff; color: var(--ink); min-width: 0; min-height: 48px; }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,47,125,.2); }
+  input[type=checkbox] { width: 22px; height: 22px; min-height: 0; accent-color: var(--accent); }
+  button { font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 12px; border: 1px solid #d8d2c4; background: #fff; color: var(--ink); cursor: pointer; min-height: 48px; transition: background .15s, transform .05s; }
+  button:hover:not(:disabled) { background: #f7f4ec; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 6px 16px rgba(58,47,125,.28); }
+  button.primary:hover:not(:disabled) { background: var(--indigo); }
+  button.ghost { background: transparent; }
+  button.danger { color: var(--bad); border-color: #ecc9c5; }
+  button:disabled { opacity: .55; cursor: default; }
+  .who { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--gold-soft); color: var(--indigo); display: grid; place-items: center; font-weight: 700; flex: none; border: 1.5px solid var(--gold); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; background: var(--gold-soft); color: #8a6512; margin-left: 8px; vertical-align: middle; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .seg button { min-height: 50px; border-radius: 14px; padding: 8px 4px; }
+  button.on-PRESENT { background: var(--ok); border-color: var(--ok); color: #fff; }
+  button.on-ABSENT { background: var(--bad); border-color: var(--bad); color: #fff; }
+  button.on-EXCUSED { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .coach-row { display: grid; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .coach-row:last-child { border-bottom: 0; }
+  .coach-row .name { font-weight: 600; font-size: 1.05rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  tr:last-child td { border-bottom: 0; }
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .tabs button { border: 0; background: transparent; border-radius: 12px; color: var(--muted); }
+  .tabs button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+  .tabs button[aria-selected=true] { background: var(--accent); color: #fff; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0; }
+  .stat { border-radius: 14px; padding: 10px 12px; background: #f6f3ec; border: 1px solid var(--line); }
+  .stat b { display: block; font-size: 1.5rem; line-height: 1.1; }
+  .stat span { font-size: .75rem; color: var(--muted); font-weight: 600; }
+  .stat.PRESENT { background: var(--ok-soft); } .stat.PRESENT b { color: var(--ok); }
+  .stat.ABSENT { background: var(--bad-soft); } .stat.ABSENT b { color: var(--bad); }
+  .stat.EXCUSED { background: var(--warn-soft); } .stat.EXCUSED b { color: var(--warn); }
+  .muted { color: var(--muted); }
+  .student { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .student:last-child { border-bottom: 0; }
+  .student .name { font-weight: 600; flex: 1 1 200px; }
+  .banner { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 20; width: calc(100% - 24px); max-width: 560px; padding: 12px 16px; border-radius: 14px; display: none; font-weight: 600; box-shadow: 0 12px 32px rgba(26,20,64,.25); }
+  .banner.error { display: block; background: var(--bad-soft); border: 1px solid #e8b9b4; color: #8f2f28; }
+  .banner.info { display: block; background: var(--ok-soft); border: 1px solid #b8dcc9; color: #1f5f43; }
+  .empty { text-align: center; padding: 26px 8px; color: var(--muted); }
+  #printView { display: none; }
+  #printView h1 { margin-bottom: 4px; }
+  #printView table { font-size: 11pt; margin-top: 10px; }
+  #printView th, #printView td { border: 1px solid #999; padding: 4px 6px; }
+  @media print {
+    body { background: #fff; }
+    .hero { display: none; }
+    main { margin: 0; padding: 0; }
+    main > *:not(#printView) { display: none !important; }
+    #printView { display: block; }
+    @page { margin: 14mm; }
+  }
+  .hidden { display: none !important; }
+  .scroll { overflow-x: auto; }
+
+  /* phones: bottom tab bar, report rows as cards, full-width form fields */
+  @media (max-width: 700px) {
+    main { padding-bottom: 110px; }
+    .card { padding: 16px; border-radius: 16px; }
+    .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border-radius: 18px 18px 0 0; border-width: 1px 0 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 24px rgba(35,31,61,.12); }
+    .tabs button { min-height: 52px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .resp tr.head { display: none; }
+    .resp, .resp tr, .resp td { display: block; }
+    .resp tr { border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; margin-bottom: 10px; background: #fcfbf8; }
+    .resp td { border: 0; padding: 6px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .resp td::before { content: attr(data-label); color: var(--muted); font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .row > input, .row > select, .row > label.row { flex: 1 1 100%; }
+    .row > label.row { display: flex; }
+    .row > label.row input { flex: 1; }
+    .row > button { flex: 1 1 100%; }
+    .bar { flex-wrap: nowrap; gap: 8px; }
+    .bar .who { flex: 1 1 0; min-width: 0; }
+    .bar .who h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1.1rem; }
+    .bar .who > div:last-child { min-width: 0; }
+    .bar .row { flex-wrap: nowrap; flex: none; gap: 6px; }
+    .bar .row > button { flex: none; padding: 8px 10px; font-size: .88rem; min-height: 40px; }
+    .student > input, .student > select { flex: 1 1 100%; }
+    .student > .row, .student .row { width: 100%; }
+    .student .row > button { flex: 1 1 40%; }
+    .student > button { flex: 1 1 100%; }
+  }
+  @media (min-width: 701px) {
+    .coach-row { grid-template-columns: 1fr 360px; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<header class="hero"><div class="brand"><div class="logo" aria-hidden="true">&#10022;</div><div><b>ALP Astrology</b><small>Attendance</small></div></div></header>
+<main>
+  <div id="banner" class="banner" role="alert"></div>
+
+  <section id="loginView" class="card login hidden">
+    <h1>Welcome</h1><small>Sign in with your username and PIN</small>
+    <label for="loginUser">Username</label>
+    <input id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false">
+    <label for="loginPin">PIN</label>
+    <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password">
+    <button id="loginBtn" class="primary">Sign in</button>
+  </section>
+
+  <section id="printView" aria-hidden="true"></section>
+
+  <section id="appView" class="hidden">
+    <div class="bar">
+      <div class="who"><div id="avatar" class="avatar"></div><div><h1 id="hello"></h1><small id="roleLine" class="muted"></small></div></div>
+      <div class="row">
+        <button id="pinBtn">Change PIN</button>
+        <button id="logoutBtn" class="ghost">Sign out</button>
+      </div>
+    </div>
+    <div id="pinForm" class="card hidden">
+      <label for="oldPin">Current PIN</label><input id="oldPin" type="password" inputmode="numeric" autocomplete="current-password">
+      <label for="newPin">New PIN (6-12 digits)</label><input id="newPin" type="password" inputmode="numeric" autocomplete="new-password">
+      <p class="row"><button id="pinSave" class="primary">Save new PIN</button><button id="pinCancel">Cancel</button></p>
+    </div>
+    <div id="content"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var STATUS_LABEL = { PRESENT: 'Present', ABSENT: 'Absent', EXCUSED: 'Excused' };
+  var token = '';
+  var me = null;
+  var overview = null;
+  var API_URL = '';                                            // set only in the copy hosted outside Google (see tools/build-github-page.mjs)
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, props) {
+    var node = document.createElement(tag);
+    props = props || {};
+    Object.keys(props).forEach(function (key) {
+      if (key === 'text') node.textContent = props[key];
+      else if (key === 'class') node.className = props[key];
+      else if (key.slice(0, 2) === 'on') node.addEventListener(key.slice(2), props[key]);
+      else if (props[key] !== false && props[key] !== null && props[key] !== undefined) node.setAttribute(key, props[key] === true ? '' : props[key]);
+    });
+    for (var i = 2; i < arguments.length; i++) { var child = arguments[i]; if (child) node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child); }
+    return node;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function banner(kind, message) {
+    var b = $('banner');
+    b.className = 'banner' + (kind ? ' ' + kind : '');
+    b.textContent = message || '';
+  }
+  function remote(name, args) {
+    if (!API_URL) return Promise.reject(new Error('This page is not connected to the server yet.'));
+    return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: name, args: args }), redirect: 'follow', credentials: 'omit' })
+      .then(function (response) { return response.json(); })
+      .then(function (body) { return body; }, function () { throw new Error('Could not reach the server. Check your internet connection and try again.'); })
+      .then(function (body) {
+        if (body && body.ok) return body.data;
+        throw new Error(body && body.error ? body.error : 'Request failed.');
+      });
+  }
+  function api(name) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    if (typeof google === 'undefined' || !google.script || !google.script.run) return remote(name, args);
+    return new Promise(function (resolve, reject) {
+      var run = google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function (error) { reject(new Error(error && error.message ? error.message : 'Request failed.')); });
+      run[name].apply(run, args);
+    });
+  }
+  function guarded(promise, done) {
+    return promise.then(function (value) { banner('', ''); if (done) done(value); return value; }).catch(function (error) {
+      if (/sign in again/i.test(error.message)) { signedOut(); }
+      banner('error', error.message);
+    });
+  }
+  function saveToken(value) { token = value; try { if (value) sessionStorage.setItem('att_token', value); else sessionStorage.removeItem('att_token'); } catch (e) { /* storage may be blocked */ } }
+
+  function signedOut() {
+    saveToken(''); me = null;
+    $('appView').classList.add('hidden');
+    $('loginView').classList.remove('hidden');
+    $('loginPin').value = '';
+  }
+  function showApp() {
+    $('loginView').classList.add('hidden');
+    $('appView').classList.remove('hidden');
+    $('hello').textContent = me.name;
+    $('avatar').textContent = (me.name || '?').trim().charAt(0).toUpperCase();
+    $('roleLine').textContent = me.role === 'ADMIN' ? 'Administrator' : 'Coach';
+    if (me.role === 'COACH') showCoach(); else showAdmin();
+  }
+
+  // ------------------------------------------------------------------ coach
+  function showCoach() {
+    var root = $('content'); clear(root);
+    guarded(api('api_coachToday', token), function (data) {
+      clear(root);
+      var card = el('div', { class: 'card' }, el('h2', { text: 'Today, ' + data.date }),
+        el('p', { class: data.students.length ? 'muted' : 'empty', text: data.students.length ? 'Tap a status for each student. You can change today\'s entry any time today.' : 'No students are assigned to you yet. Ask an admin.' }));
+      data.students.forEach(function (student) {
+        var buttons = el('div', { class: 'seg' });
+        ['PRESENT', 'ABSENT', 'EXCUSED'].forEach(function (status) {
+          var button = el('button', { text: STATUS_LABEL[status], class: student.status === status ? 'on-' + status : '', 'aria-pressed': student.status === status ? 'true' : 'false' });
+          button.addEventListener('click', function () {
+            buttons.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+            guarded(api('api_markAttendance', token, student.student_id, status), function () { banner('info', 'Saved: ' + student.name + ' - ' + STATUS_LABEL[status]); student.status = status; refreshButtons(buttons, status); })
+              .then(function () { buttons.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); });
+          });
+          buttons.appendChild(button);
+        });
+        card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name', text: student.name }), buttons));
+      });
+      root.appendChild(card);
+      var nameInput = el('input', { placeholder: 'Student name', 'aria-label': 'Student name' });
+      var addButton = el('button', { text: 'Add student', class: 'primary' });
+      addButton.addEventListener('click', function () {
+        guarded(api('api_addMyStudent', token, nameInput.value), function () { banner('info', 'Student added.'); showCoach(); });
+      });
+      root.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Add a student to your list' }), el('div', { class: 'row' }, nameInput, addButton)));
+    });
+  }
+  function refreshButtons(container, status) {
+    var order = ['PRESENT', 'ABSENT', 'EXCUSED'];
+    container.querySelectorAll('button').forEach(function (button, i) {
+      var on = order[i] === status;
+      button.className = on ? 'on-' + order[i] : '';
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  // ------------------------------------------------------------------ admin
+  var tab = 'attendance';
+  function showAdmin() {
+    guarded(api('api_adminOverview', token), function (data) { overview = data; renderAdmin(); });
+  }
+  function coaches() { return overview.people.filter(function (p) { return p.role === 'COACH' && p.active; }); }
+  function coachName(id) { var p = overview.people.filter(function (x) { return x.user_id === id; })[0]; return p ? p.name : '(unknown)'; }
+  function renderAdmin() {
+    var root = $('content'); clear(root);
+    var tabs = el('div', { class: 'tabs', role: 'tablist' });
+    [['attendance', 'Attendance'], ['students', 'Students'], ['people', 'People']].forEach(function (pair) {
+      var button = el('button', { text: pair[1], role: 'tab', 'aria-selected': tab === pair[0] ? 'true' : 'false' });
+      button.addEventListener('click', function () { tab = pair[0]; renderAdmin(); });
+      tabs.appendChild(button);
+    });
+    root.appendChild(tabs);
+    var body = el('div'); root.appendChild(body);
+    if (tab === 'attendance') { renderReport(body, todayString()); renderExport(body); }
+    else if (tab === 'students') renderStudents(body);
+    else renderPeople(body);
+  }
+  function todayString() { return new Date(Date.now() + 19800000).toISOString().slice(0, 10); }      // India time (UTC+05:30)
+
+  function renderReport(body, date) {
+    var card = el('div', { class: 'card' });
+    var dateInput = el('input', { type: 'date', value: date, 'aria-label': 'Date' });
+    var loadButton = el('button', { text: 'Show', class: 'primary' });
+    var out = el('div');
+    card.appendChild(el('div', { class: 'row' }, dateInput, loadButton));
+    card.appendChild(out);
+    body.appendChild(card);
+    function load() {
+      guarded(api('api_attendanceReport', token, dateInput.value), function (report) {
+        clear(out);
+        var summary = el('div', { class: 'stats' });
+        [['PRESENT', 'Present'], ['ABSENT', 'Absent'], ['EXCUSED', 'Excused'], ['NOT_RECORDED', 'Not recorded']].forEach(function (pair) {
+          summary.appendChild(el('div', { class: 'stat ' + pair[0] }, el('b', { text: String(report.summary[pair[0]]) }), el('span', { text: pair[1] })));
+        });
+        out.appendChild(summary);
+        var table = el('table', { class: 'resp' });
+        table.appendChild(el('tr', { class: 'head' }, el('th', { text: 'Student' }), el('th', { text: 'Coach' }), el('th', { text: 'Status' }), el('th', { text: 'Marked by' })));
+        report.rows.forEach(function (row) {
+          var select = el('select', { 'aria-label': 'Status for ' + row.student });
+          [['', 'Not recorded']].concat(['PRESENT', 'ABSENT', 'EXCUSED'].map(function (s) { return [s, STATUS_LABEL[s]]; })).forEach(function (opt) {
+            select.appendChild(el('option', { value: opt[0], text: opt[1], selected: opt[0] === row.status }));
+          });
+          select.addEventListener('change', function () {
+            if (!select.value) { select.value = row.status; banner('error', 'An entry can be changed but not removed.'); return; }
+            guarded(api('api_adminSetAttendance', token, report.date, row.student_id, select.value), function () { banner('info', 'Saved.'); load(); });
+          });
+          table.appendChild(el('tr', null, el('td', { text: row.student, 'data-label': 'Student' }), el('td', { text: row.coach, 'data-label': 'Coach' }), el('td', { 'data-label': 'Status' }, select), el('td', { class: 'muted', text: row.marked_by, 'data-label': 'Marked by' })));
+        });
+        out.appendChild(el('div', { class: 'scroll' }, table));
+      });
+    }
+    loadButton.addEventListener('click', load);
+    load();
+  }
+
+  // ------------------------------------------------------------------ export (admin only: the data comes from an admin-only server function)
+  var LABEL_ALL = { PRESENT: 'Present', ABSENT: 'Absent', EXCUSED: 'Excused', NOT_RECORDED: 'Not recorded' };
+  var COLUMNS = [['Date', 'date', 12], ['Student', 'student', 28], ['Coach', 'coach', 24], ['Status', 'status', 14], ['Marked by', 'marked_by', 24], ['Marked at (IST)', 'marked_at', 18]];
+  function cellText(row, key) { return key === 'status' ? LABEL_ALL[row.status] : row[key]; }
+  function download(name, blob) {
+    var url = URL.createObjectURL(blob);
+    var link = el('a', { href: url, download: name });
+    document.body.appendChild(link); link.click();
+    setTimeout(function () { document.body.removeChild(link); URL.revokeObjectURL(url); }, 1500);
+  }
+  function renderExport(body) {
+    var from = el('input', { type: 'date', value: todayString().slice(0, 8) + '01', 'aria-label': 'From date' });
+    var to = el('input', { type: 'date', value: todayString(), 'aria-label': 'To date' });
+    var excel = el('button', { text: 'Download Excel (.xlsx)', class: 'primary' });
+    var pdf = el('button', { text: 'Download PDF' });
+    var card = el('div', { class: 'card' }, el('h2', { text: 'Export' }),
+      el('p', { class: 'muted', text: 'One row per student per day in the range (up to 93 days). For PDF, choose "Save as PDF" as the printer.' }),
+      el('div', { class: 'row' }, el('label', { class: 'row' }, 'From', from), el('label', { class: 'row' }, 'To', to), excel, pdf));
+    function run(kind) {
+      [excel, pdf].forEach(function (b) { b.disabled = true; });
+      guarded(api('api_attendanceRange', token, from.value, to.value), function (data) {
+        var base = 'attendance_' + data.from + '_to_' + data.to;
+        if (kind === 'excel') { download(base + '.xlsx', makeXlsx(data)); banner('info', 'Excel file downloaded (' + data.rows.length + ' rows).'); }
+        else printReport(data);
+      }).then(function () { [excel, pdf].forEach(function (b) { b.disabled = false; }); });
+    }
+    excel.addEventListener('click', function () { run('excel'); });
+    pdf.addEventListener('click', function () { run('pdf'); });
+    body.appendChild(card);
+  }
+  function printReport(data) {
+    var view = $('printView'); clear(view);
+    view.appendChild(el('h1', { text: 'ALP Astrology - Attendance report' }));
+    view.appendChild(el('p', { text: data.from + ' to ' + data.to + '   |   Present ' + data.summary.PRESENT + ', Absent ' + data.summary.ABSENT + ', Excused ' + data.summary.EXCUSED + ', Not recorded ' + data.summary.NOT_RECORDED }));
+    var table = el('table');
+    var headRow = el('tr');
+    COLUMNS.forEach(function (c) { headRow.appendChild(el('th', { text: c[0] })); });
+    table.appendChild(headRow);
+    data.rows.forEach(function (row) {
+      var tr = el('tr');
+      COLUMNS.forEach(function (c) { tr.appendChild(el('td', { text: cellText(row, c[1]) })); });
+      table.appendChild(tr);
+    });
+    view.appendChild(table);
+    setTimeout(function () { window.print(); }, 100);
+  }
+
+  // A small .xlsx writer: an Excel file is a zip of XML files (stored, not compressed). No outside library is needed.
+  var CRC_TABLE = (function () { var t = [], n, k, c; for (n = 0; n < 256; n++) { c = n; for (k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(bytes) { var c = 0xFFFFFFFF; for (var i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zip(files) {
+    var encoder = new TextEncoder(), parts = [], central = [], offset = 0;
+    function u16(v) { return [v & 255, (v >>> 8) & 255]; }
+    function u32(v) { return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
+    files.forEach(function (file) {
+      var name = encoder.encode(file[0]), data = encoder.encode(file[1]), crc = crc32(data);
+      var head = [].concat(u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0));
+      parts.push(new Uint8Array(head), name, data);
+      central.push(new Uint8Array([].concat(u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset))), name);
+      offset += head.length + name.length + data.length;
+    });
+    var centralSize = 0; central.forEach(function (c) { centralSize += c.length; });
+    var end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(centralSize), u32(offset), u16(0)));
+    return new Blob(parts.concat(central, [end]), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  function xml(text) { return String(text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function columnName(i) { return String.fromCharCode(65 + i); }
+  function makeXlsx(data) {
+    var NS = 'h' + 'ttp://schemas.openxmlformats.org/';                                 // the namespace is an identifier, not a download
+    var rows = [COLUMNS.map(function (c) { return c[0]; })].concat(data.rows.map(function (row) { return COLUMNS.map(function (c) { return cellText(row, c[1]); }); }));
+    var sheetRows = rows.map(function (cells, r) {
+      return '<row r="' + (r + 1) + '">' + cells.map(function (value, c) {
+        return '<c r="' + columnName(c) + (r + 1) + '" t="inlineStr"' + (r === 0 ? ' s="1"' : '') + '><is><t>' + xml(value) + '</t></is></c>';       // text only, so no cell is ever a formula
+      }).join('') + '</row>';
+    }).join('');
+    var cols = '<cols>' + COLUMNS.map(function (c, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + c[2] + '" customWidth="1"/>'; }).join('') + '</cols>';
+    var head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    return zip([
+      ['[Content_Types].xml', head + '<Types xmlns="' + NS + 'package/2006/content-types' + '"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+      ['_rels/.rels', head + '<Relationships xmlns="' + NS + 'package/2006/relationships"><Relationship Id="rId1" Type="' + NS + 'officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+      ['xl/workbook.xml', head + '<workbook xmlns="' + NS + 'spreadsheetml/2006/main" xmlns:r="' + NS + 'officeDocument/2006/relationships"><sheets><sheet name="Attendance" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+      ['xl/_rels/workbook.xml.rels', head + '<Relationships xmlns="' + NS + 'package/2006/relationships"><Relationship Id="rId1" Type="' + NS + 'officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="' + NS + 'officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+      ['xl/styles.xml', head + '<styleSheet xmlns="' + NS + 'spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
+      ['xl/worksheets/sheet1.xml', head + '<worksheet xmlns="' + NS + 'spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' + cols + '<sheetData>' + sheetRows + '</sheetData></worksheet>']
+    ]);
+  }
+
+  function coachSelect(selected) {
+    var select = el('select', { 'aria-label': 'Coach' });
+    coaches().forEach(function (c) { select.appendChild(el('option', { value: c.user_id, text: c.name, selected: c.user_id === selected })); });
+    return select;
+  }
+  function renderStudents(body) {
+    var add = el('div', { class: 'card' }, el('h2', { text: 'Add a student' }));
+    var name = el('input', { placeholder: 'Student name', 'aria-label': 'Student name' });
+    var coach = coachSelect('');
+    var addButton = el('button', { text: 'Add student', class: 'primary' });
+    addButton.addEventListener('click', function () {
+      guarded(api('api_addStudent', token, name.value, coach.value), function () { banner('info', 'Student added.'); showAdmin(); });
+    });
+    add.appendChild(el('div', { class: 'row' }, name, coach, addButton));
+    if (!coaches().length) add.appendChild(el('p', { class: 'muted', text: 'Add a coach first (People tab).' }));
+    body.appendChild(add);
+    var list = el('div', { class: 'card' }, el('h2', { text: 'Students' }));
+    overview.students.forEach(function (student) {
+      var nameInput = el('input', { value: student.name, 'aria-label': 'Student name' });
+      var coachInput = coachSelect(student.coach_id);
+      var active = el('input', { type: 'checkbox', checked: student.active, 'aria-label': 'Active' });
+      var save = el('button', { text: 'Save' });
+      save.addEventListener('click', function () {
+        guarded(api('api_updateStudent', token, student.student_id, nameInput.value, coachInput.value, active.checked), function () { banner('info', 'Saved.'); showAdmin(); });
+      });
+      list.appendChild(el('div', { class: 'student' }, nameInput, coachInput, el('label', { class: 'row' }, active, 'Active'), save));
+    });
+    if (!overview.students.length) list.appendChild(el('p', { class: 'empty', text: 'No students yet.' }));
+    body.appendChild(list);
+  }
+  function renderPeople(body) {
+    var add = el('div', { class: 'card' }, el('h2', { text: 'Add an admin or coach' }));
+    var username = el('input', { placeholder: 'Username (e.g. priya)', 'aria-label': 'Username', autocapitalize: 'none' });
+    var display = el('input', { placeholder: 'Full name', 'aria-label': 'Full name' });
+    var role = el('select', { 'aria-label': 'Role' }, el('option', { value: 'COACH', text: 'Coach' }), el('option', { value: 'ADMIN', text: 'Admin' }));
+    var pin = el('input', { placeholder: 'PIN (6-12 digits)', 'aria-label': 'PIN', inputmode: 'numeric' });
+    var addButton = el('button', { text: 'Add person', class: 'primary' });
+    addButton.addEventListener('click', function () {
+      guarded(api('api_addPerson', token, username.value, display.value, role.value, pin.value), function () { banner('info', 'Person added. Tell them their username and PIN.'); showAdmin(); });
+    });
+    add.appendChild(el('div', { class: 'row' }, username, display, role, pin, addButton));
+    body.appendChild(add);
+    var many = el('div', { class: 'card' }, el('h2', { text: 'Add many coaches at once' }),
+      el('p', { class: 'muted', text: 'One coach per line: username, full name, PIN (6-12 digits). Example: priya, Priya Raman, 482913. Nothing is saved unless every line is valid.' }));
+    var lines = el('textarea', { rows: 6, placeholder: 'priya, Priya Raman, 482913\nravi, Ravi Kumar, 730264', 'aria-label': 'Coaches, one per line', spellcheck: 'false' });
+    var manyButton = el('button', { text: 'Add all coaches', class: 'primary' });
+    manyButton.addEventListener('click', function () {
+      manyButton.disabled = true;
+      guarded(api('api_addCoaches', token, lines.value), function (result) { banner('info', result.created + ' coaches added. Give each their username and PIN.'); showAdmin(); })
+        .then(function () { manyButton.disabled = false; });
+    });
+    many.appendChild(lines); many.appendChild(el('p', null, manyButton));
+    body.appendChild(many);
+    var list = el('div', { class: 'card' }, el('h2', { text: 'People' }));
+    overview.people.forEach(function (person) {
+      var resetInput = el('input', { placeholder: 'New PIN', 'aria-label': 'New PIN for ' + person.name, inputmode: 'numeric' });
+      var resetButton = el('button', { text: 'Reset PIN' });
+      resetButton.addEventListener('click', function () {
+        guarded(api('api_resetPin', token, person.user_id, resetInput.value), function () { banner('info', 'PIN reset for ' + person.name + '.'); resetInput.value = ''; });
+      });
+      var toggle = el('button', { text: person.active ? 'Deactivate' : 'Reactivate', class: person.active ? 'danger' : '' });
+      toggle.addEventListener('click', function () {
+        guarded(api('api_setPersonActive', token, person.user_id, !person.active), function () { banner('info', 'Updated.'); showAdmin(); });
+      });
+      list.appendChild(el('div', { class: 'student' },
+        el('span', { class: 'name' }, person.name, el('span', { class: 'badge', text: person.role === 'ADMIN' ? 'Admin' : 'Coach' }), el('span', { class: 'muted', text: '  @' + person.username + (person.active ? '' : '  (inactive)') })),
+        el('div', { class: 'row' }, resetInput, resetButton, toggle)));
+    });
+    body.appendChild(list);
+  }
+
+  // ------------------------------------------------------------------ sign in, PIN
+  function start() {
+    var saved = '';
+    try { saved = sessionStorage.getItem('att_token') || ''; } catch (e) { saved = ''; }
+    if (saved) {
+      token = saved;
+      api('api_me', token).then(function (info) { me = info; showApp(); }).catch(function () { signedOut(); });
+    } else {
+      $('loginView').classList.remove('hidden');
+    }
+  }
+  $('loginBtn').addEventListener('click', function () {
+    var button = $('loginBtn'); button.disabled = true;
+    guarded(api('api_login', $('loginUser').value, $('loginPin').value), function (result) {
+      saveToken(result.token); me = { name: result.name, role: result.role }; $('loginPin').value = ''; showApp();
+    }).then(function () { button.disabled = false; });
+  });
+  $('loginPin').addEventListener('keydown', function (event) { if (event.key === 'Enter') $('loginBtn').click(); });
+  $('logoutBtn').addEventListener('click', function () { api('api_logout', token).then(signedOut, signedOut); banner('', ''); });
+  $('pinBtn').addEventListener('click', function () { $('pinForm').classList.toggle('hidden'); });
+  $('pinCancel').addEventListener('click', function () { $('pinForm').classList.add('hidden'); });
+  $('pinSave').addEventListener('click', function () {
+    guarded(api('api_changePin', token, $('oldPin').value, $('newPin').value), function () {
+      banner('info', 'PIN changed.'); $('oldPin').value = ''; $('newPin').value = ''; $('pinForm').classList.add('hidden');
+    });
+  });
+  start();
+})();
+</script>
+</body>
+</html>
