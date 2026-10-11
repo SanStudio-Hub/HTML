@@ -105,9 +105,11 @@
   .credit a { color: #8a4b12; font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--amber); }
   .credit a:hover { color: var(--accent-dark); }
   .login-logo { display: block; width: 160px; height: 160px; margin: -18px auto -8px; }
-  .hero-badge { display: none; margin-left: auto; width: 60px; height: 60px; border-radius: 50%; background: #fff; border: 2px solid var(--amber); overflow: hidden; place-items: center; box-shadow: 0 4px 14px rgba(0,0,0,.28); flex: none; }
-  body.signed-in .hero-badge { display: grid; }
-  .hero-badge img { width: 128%; height: 128%; max-width: none; }
+  .hero-badge { display: none; margin-left: auto; width: 60px; height: 60px; min-width: 60px; flex: none; aspect-ratio: 1 / 1; border-radius: 50%; background: #fff; border: 2px solid var(--amber); overflow: hidden; position: relative; box-shadow: 0 4px 14px rgba(0,0,0,.28); }
+  body.signed-in .hero-badge { display: block; }
+  .hero-badge img { position: absolute; left: 50%; top: 50%; width: 138%; height: 138%; max-width: none; transform: translate(-50%, -50%); }   /* centred on the circle; the logo file has empty margins, so it is enlarged to fill */
+  .login .remember { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-size: .92rem; font-weight: 500; color: var(--ink); }
+  .login .remember input { width: 22px; min-width: 22px; height: 22px; min-height: 0; flex: none; }
   .hidden { display: none !important; }
   .scroll { overflow-x: auto; }
 
@@ -210,8 +212,11 @@
     <input id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false">
     <label for="loginPin">PIN</label>
     <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password">
+    <label class="remember"><input id="rememberMe" type="checkbox" checked> Keep me signed in on this device</label>
     <button id="loginBtn" class="primary">Sign in</button>
   </section>
+
+  <section id="resumeView" class="card login hidden"><p class="muted">Signing you in...</p></section>
 
   <section id="printView" aria-hidden="true"></section>
 
@@ -306,7 +311,19 @@
       banner('error', error.message);
     });
   }
-  function saveToken(value) { token = value; try { if (value) sessionStorage.setItem('att_token', value); else sessionStorage.removeItem('att_token'); } catch (e) { /* storage may be blocked */ } }
+  // The sign-in token is kept on this device: in localStorage when "keep me signed in" was chosen (survives closing the browser), otherwise only for this tab.
+  function saveToken(value, persist) {
+    token = value;
+    ['localStorage', 'sessionStorage'].forEach(function (kind) { try { window[kind].removeItem('att_token'); } catch (e) { /* storage may be blocked */ } });
+    if (!value) return;
+    try { (persist ? window.localStorage : window.sessionStorage).setItem('att_token', value); }
+    catch (e) { try { window.sessionStorage.setItem('att_token', value); } catch (e2) { /* blocked: the person signs in again next time */ } }
+  }
+  function readToken() {
+    var found = '';
+    ['localStorage', 'sessionStorage'].forEach(function (kind) { if (!found) { try { found = window[kind].getItem('att_token') || ''; } catch (e) { found = ''; } } });
+    return found;
+  }
 
   // ------------------------------------------------------------------ small building blocks
   var DECISION_LABEL = { CONTINUE: 'Continue', PROMOTE: 'Promote to next course', REPEAT: 'Repeat / extend', NEEDS_SUPPORT: 'Needs support' };
@@ -900,20 +917,25 @@
   }
 
   // ------------------------------------------------------------------ sign in, PIN
+  // On every page load: if this device holds a saved sign-in, check it with the server and go straight into the app.
+  // Only a clear "sign in again" answer signs the person out; a network or server hiccup keeps the saved sign-in and says so.
   function start() {
-    var saved = '';
-    try { saved = sessionStorage.getItem('att_token') || ''; } catch (e) { saved = ''; }
-    if (saved) {
-      token = saved;
-      api('api_me', token).then(function (info) { me = info; showApp(); }).catch(function () { signedOut(); });
-    } else {
-      $('loginView').classList.remove('hidden');
-    }
+    var saved = readToken();
+    if (!saved) { $('loginView').classList.remove('hidden'); return; }
+    token = saved;
+    $('resumeView').classList.remove('hidden');
+    api('api_me', token).then(function (info) { $('resumeView').classList.add('hidden'); me = info; showApp(); })
+      .catch(function (error) {
+        $('resumeView').classList.add('hidden');
+        if (/sign in again/i.test(error.message)) { signedOut(); return; }
+        $('loginView').classList.remove('hidden');
+        banner('error', error.message + ' Reload the page to try again, or sign in below.');
+      });
   }
   $('loginBtn').addEventListener('click', function () {
     var button = $('loginBtn'); button.disabled = true;
-    guarded(api('api_login', $('loginUser').value, $('loginPin').value), function (result) {
-      saveToken(result.token); me = { name: result.name, role: result.role }; $('loginPin').value = ''; showApp();
+    guarded(api('api_login', $('loginUser').value, $('loginPin').value, $('rememberMe').checked), function (result) {
+      saveToken(result.token, result.remember); me = { name: result.name, role: result.role }; $('loginPin').value = ''; showApp();
     }).then(function () { button.disabled = false; });
   });
   $('loginPin').addEventListener('keydown', function (event) { if (event.key === 'Enter') $('loginBtn').click(); });
@@ -921,8 +943,9 @@
   $('pinBtn').addEventListener('click', function () { $('pinForm').classList.toggle('hidden'); });
   $('pinCancel').addEventListener('click', function () { $('pinForm').classList.add('hidden'); });
   $('pinSave').addEventListener('click', function () {
-    guarded(api('api_changePin', token, $('oldPin').value, $('newPin').value), function () {
-      banner('info', 'PIN changed.'); $('oldPin').value = ''; $('newPin').value = ''; $('pinForm').classList.add('hidden');
+    guarded(api('api_changePin', token, $('oldPin').value, $('newPin').value), function () {          // a new PIN ends every saved sign-in, so sign in again with it
+      $('oldPin').value = ''; $('newPin').value = ''; $('pinForm').classList.add('hidden');
+      signedOut(); banner('info', 'PIN changed. Please sign in with your new PIN.');
     });
   });
   Array.prototype.forEach.call(document.querySelectorAll('img.brandimg'), function (img) {        // a missing logo file must never break the page
