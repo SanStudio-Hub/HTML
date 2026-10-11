@@ -205,25 +205,44 @@
     b.className = 'banner' + (kind ? ' ' + kind : '');
     b.textContent = message || '';
   }
-  function remote(name, args) {
+  // Many coaches may save at the same moment. "Server is busy" means the server did nothing yet, so any call may be retried safely.
+  // A dropped connection is retried only for calls that just read data or sign in, never for ones that save (they could be saved twice).
+  var RETRY_MS = 1000;
+  var BUSY = /server is busy/i;
+  var SAFE_TO_REPEAT = { api_login: 1, api_me: 1, api_coachToday: 1, api_adminOverview: 1, api_attendanceReport: 1, api_attendanceRange: 1 };
+  function pause(attempt) { return new Promise(function (resolve) { setTimeout(resolve, RETRY_MS * attempt + Math.floor(Math.random() * RETRY_MS * 0.7)); }); }
+  function viaFetch(name, args) {
     if (!API_URL) return Promise.reject(new Error('This page is not connected to the server yet.'));
     return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: name, args: args }), redirect: 'follow', credentials: 'omit' })
       .then(function (response) { return response.json(); })
-      .then(function (body) { return body; }, function () { throw new Error('Could not reach the server. Check your internet connection and try again.'); })
-      .then(function (body) {
-        if (body && body.ok) return body.data;
-        throw new Error(body && body.error ? body.error : 'Request failed.');
+      .then(function (body) { return { body: body }; }, function () { return { down: true }; })
+      .then(function (result) {
+        if (result.down) { var gone = new Error('Could not reach the server. Check your internet connection and try again.'); gone.down = true; throw gone; }
+        if (result.body && result.body.ok) return result.body.data;
+        throw new Error(result.body && result.body.error ? result.body.error : 'Request failed.');
       });
   }
-  function api(name) {
-    var args = Array.prototype.slice.call(arguments, 1);
-    if (typeof google === 'undefined' || !google.script || !google.script.run) return remote(name, args);
+  function viaGoogle(name, args) {
     return new Promise(function (resolve, reject) {
       var run = google.script.run
         .withSuccessHandler(resolve)
         .withFailureHandler(function (error) { reject(new Error(error && error.message ? error.message : 'Request failed.')); });
       run[name].apply(run, args);
     });
+  }
+  function api(name) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    var send = (typeof google === 'undefined' || !google.script || !google.script.run) ? viaFetch : viaGoogle;
+    var attempts = 0;
+    function once() {
+      attempts++;
+      return send(name, args).catch(function (error) {
+        if (BUSY.test(error.message) && attempts < 4) return pause(attempts).then(once);
+        if (error.down && SAFE_TO_REPEAT[name] && attempts < 3) return pause(attempts).then(once);
+        throw error;
+      });
+    }
+    return once();
   }
   function guarded(promise, done) {
     return promise.then(function (value) { banner('', ''); if (done) done(value); return value; }).catch(function (error) {
@@ -271,12 +290,16 @@
         card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name', text: student.name }), buttons));
       });
       root.appendChild(card);
-      var nameInput = el('input', { placeholder: 'Student name', 'aria-label': 'Student name' });
-      var addButton = el('button', { text: 'Add student', class: 'primary' });
+      var names = el('textarea', { rows: 4, placeholder: 'Asha\nBala\nChitra', 'aria-label': 'Student names, one per line', spellcheck: 'false' });
+      var addButton = el('button', { text: 'Add students', class: 'primary' });
       addButton.addEventListener('click', function () {
-        guarded(api('api_addMyStudent', token, nameInput.value), function () { banner('info', 'Student added.'); showCoach(); });
+        addButton.disabled = true;
+        guarded(api('api_addMyStudents', token, names.value), function (result) { banner('info', result.created + (result.created === 1 ? ' student added.' : ' students added.')); showCoach(); })
+          .then(function () { addButton.disabled = false; });
       });
-      root.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Add a student to your list' }), el('div', { class: 'row' }, nameInput, addButton)));
+      root.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Add students to your list' }),
+        el('p', { class: 'muted', text: 'Type or paste one name per line (up to 60). One name is fine too. Nothing is saved unless every line is valid.' }),
+        names, el('p', null, addButton)));
     });
   }
   function refreshButtons(container, status) {
@@ -450,6 +473,18 @@
     add.appendChild(el('div', { class: 'row' }, name, coach, addButton));
     if (!coaches().length) add.appendChild(el('p', { class: 'muted', text: 'Add a coach first (People tab).' }));
     body.appendChild(add);
+    var many = el('div', { class: 'card' }, el('h2', { text: 'Add many students to one coach' }));
+    var manyCoach = coachSelect('');
+    var manyNames = el('textarea', { rows: 5, placeholder: 'Asha\nBala\nChitra', 'aria-label': 'Student names, one per line', spellcheck: 'false' });
+    var manyButton = el('button', { text: 'Add all students', class: 'primary' });
+    manyButton.addEventListener('click', function () {
+      manyButton.disabled = true;
+      guarded(api('api_addStudents', token, manyCoach.value, manyNames.value), function (result) { banner('info', result.created + (result.created === 1 ? ' student added.' : ' students added.')); showAdmin(); })
+        .then(function () { manyButton.disabled = false; });
+    });
+    many.appendChild(el('p', { class: 'muted', text: 'Choose the coach, then type or paste one student name per line. Nothing is saved unless every line is valid.' }));
+    many.appendChild(el('div', { class: 'row' }, manyCoach)); many.appendChild(manyNames); many.appendChild(el('p', null, manyButton));
+    body.appendChild(many);
     var list = el('div', { class: 'card' }, el('h2', { text: 'Students' }));
     overview.students.forEach(function (student) {
       var nameInput = el('input', { value: student.name, 'aria-label': 'Student name' });
