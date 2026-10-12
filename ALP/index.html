@@ -189,14 +189,45 @@
   .person .name { font-weight: 600; }
   input[type=search] { width: 100%; margin-bottom: 6px; }
   .loading { padding: 18px 4px; }
+  .stack { display: grid; gap: 8px; }
   .ready { margin: 10px 0 4px; font-weight: 600; color: #1f5f43; }
+  .tag.morning { background: #fff0cc; color: #8a5a00; }
+  .tag.evening { background: #ece7f7; color: #4a3a86; }
+  h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
+  .coach-row + h3.group, .card > h3.group:first-of-type { margin-top: 10px; }
+  .clockcard .clock-row { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
+  .clockcard p { margin: 4px 0 0; }
+  .live { width: 12px; height: 12px; border-radius: 50%; background: #c9bba8; flex: none; }
+  .live.on { background: var(--ok); box-shadow: 0 0 0 4px rgba(46,125,91,.22); }
+  .sess-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+  .sess { border-top: 4px solid var(--amber); }
+  .sess.evening { border-top-color: #7a6bc0; }
+  .sess.unset { border-top-color: #cfc3b3; }
+  .sess-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .sess-head .sess-title { flex: 1; min-width: 0; }
+  .sess-head h2 { margin: 0; }
+  .sess-badge { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: #fff0cc; color: #8a5a00; border: 1.5px solid var(--amber); flex: none; }
+  .sess.evening .sess-badge { background: #ece7f7; color: #4a3a86; border-color: #7a6bc0; }
+  .sess.unset .sess-badge { background: #f1ebe0; color: var(--muted); border-color: #cfc3b3; }
+  .metric { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: .9rem; }
+  .metric > span:first-child { width: 118px; flex: none; }
+  .metric b { width: 44px; text-align: right; flex: none; }
+  .small-line { margin: 4px 0; font-size: .85rem; }
+  .coachchip { padding: 3px 10px; border-radius: 999px; background: #f6efe3; font-size: .82rem; font-weight: 600; color: var(--accent-dark); }
+  .attn { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .attn-name { font-weight: 600; }
+  .attn-name .sub { display: block; font-weight: 400; font-size: .8rem; }
+  .attn .flags { grid-column: 1; }
+  .attn button { grid-column: 2; grid-row: 1 / span 2; }
+  table.compare td:first-child { font-weight: 600; }
+  @media (min-width: 900px) { .sess-grid { grid-template-columns: 1fr 1fr; } }
   .ready-line { margin: 0 0 2px; }
   @media (max-width: 700px) {
     .stu-top button { flex: none; }
     .resp td .stu-progress { flex: 1; justify-content: flex-end; }
     .resp td .meter { max-width: 120px; }
     .tabs { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; }
-    .tabs button { padding-left: 4px; padding-right: 4px; font-size: .9rem; }
+    .tabs button { padding-left: 2px; padding-right: 2px; font-size: .8rem; }
     .person .row > input { flex: 1 1 60%; }
     .person .row > button { flex: 1 1 30%; }
   }
@@ -310,6 +341,7 @@
   function guarded(promise, done) {
     return promise.then(function (value) { banner('', ''); if (done) done(value); return value; }).catch(function (error) {
       if (/sign in again/i.test(error.message)) { signedOut(); }
+      if (/set your own PIN first/i.test(error.message) && me) { me.mustChange = true; showPinGate(); return; }
       banner('error', error.message);
     });
   }
@@ -331,10 +363,14 @@
   var DECISION_LABEL = { CONTINUE: 'Continue', PROMOTE: 'Promote to next course', REPEAT: 'Repeat / extend', NEEDS_SUPPORT: 'Needs support' };
   var FLAG_LABEL = { LOW_ATTENDANCE: 'Low attendance', INACTIVE: 'No recent activity', BEHIND: 'Behind the class', NEEDS_SUPPORT: 'Needs support' };
   var ENROLL_LABEL = { ENROLLED: 'Enrolled', COMPLETED: 'Completed', ON_HOLD: 'On hold', WITHDRAWN: 'Withdrawn' };
+  var SESSION_LABEL = { MORNING: 'Morning', EVENING: 'Evening' };
+  var SESSION_TIME = { MORNING: '4:30 to 6:30 AM', EVENING: '6:30 to 8:30 PM' };
+  var SESSION_CHOICES = [['MORNING', 'Morning (4:30 to 6:30 AM)'], ['EVENING', 'Evening (6:30 to 8:30 PM)']];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   function tag(text, kind) { return el('span', { class: 'tag' + (kind ? ' ' + kind : ''), text: text }); }
   function idTag(id) { return el('span', { class: 'idtag', text: id }); }
+  function sessionTag(key) { return key ? tag(SESSION_LABEL[key] || key, key.toLowerCase()) : ''; }
   function pct(value) { return value === null || value === undefined ? '-' : value + '%'; }
   function meter(percent) {
     var node = el('span', { class: 'meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' }, el('span', { class: 'fill' }));
@@ -358,7 +394,7 @@
   function shortIds(ids) { return ids.length > 6 ? ids.slice(0, 6).join(', ') + ' and ' + (ids.length - 6) + ' more' : ids.join(', '); }
 
   // ------------------------------------------------------------------ app shell: tabs, navigation
-  var nav = { tab: '', profile: '', back: '' };
+  var nav = { tab: '', profile: '', back: '', session: '', compare: '' };
 
   function signedOut() {
     saveToken(''); me = null;
@@ -375,13 +411,28 @@
     $('hello').textContent = me.name;
     $('avatar').textContent = (me.name || '?').trim().charAt(0).toUpperCase();
     $('roleLine').textContent = isAdmin() ? 'Administrator' : 'Coach';
-    nav = { tab: isAdmin() ? 'attendance' : 'today', profile: '', back: '' };
+    if (me.mustChange) { showPinGate(); return; }
+    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '' };
     render();
   }
-  function tabList() {
-    return isAdmin() ? [['attendance', 'Attendance'], ['students', 'Students'], ['classes', 'Classes'], ['people', 'People']] : [['today', 'Today'], ['students', 'Students']];
+  // A PIN chosen by an administrator is temporary: nothing else works until the person has chosen their own.
+  function showPinGate() {
+    var root = $('content'); clear(root);
+    var oldPin = el('input', { type: 'password', inputmode: 'numeric', placeholder: 'The PIN you were given', autocomplete: 'current-password', 'aria-label': 'Current PIN' });
+    var newPin = el('input', { type: 'password', inputmode: 'numeric', placeholder: 'Your own new PIN (6-12 digits)', autocomplete: 'new-password', 'aria-label': 'New PIN' });
+    var save = el('button', { text: 'Save my PIN', class: 'primary' });
+    save.addEventListener('click', function () {
+      save.disabled = true;
+      guarded(api('api_changePin', token, oldPin.value, newPin.value), function () { signedOut(); banner('info', 'PIN saved. Please sign in with your new PIN.'); }).then(function () { save.disabled = false; });
+    });
+    root.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Choose your own PIN' }),
+      el('p', { class: 'muted', text: 'Your administrator gave you a first PIN. Before you continue, choose a PIN that only you know (6 to 12 digits) and do not share it.' }),
+      el('div', { class: 'stack' }, oldPin, newPin), el('p', null, save)));
   }
-  function go(tabName) { nav.tab = tabName; nav.profile = ''; render(); }
+  function tabList() {
+    return isAdmin() ? [['home', 'Home'], ['attendance', 'Attendance'], ['students', 'Students'], ['classes', 'Classes'], ['people', 'People']] : [['today', 'Today'], ['students', 'Students']];
+  }
+  function go(tabName) { nav.tab = tabName; nav.profile = ''; nav.session = ''; nav.compare = ''; if (tabName !== 'students') nav.importResult = null; render(); }
   function openProfile(studentId) { nav.profile = studentId; render(); }
   function render() {
     var root = $('content'); clear(root);
@@ -396,7 +447,7 @@
     root.appendChild(body);
     try { window.scrollTo(0, 0); } catch (e) { /* not available everywhere */ }
     if (nav.profile) { showProfile(body, nav.profile); return; }
-    var views = { today: coachToday, students: isAdmin() ? adminStudents : coachStudents, attendance: adminAttendance, classes: adminClasses, people: adminPeople };
+    var views = { home: adminHome, today: coachToday, students: isAdmin() ? adminStudents : coachStudents, attendance: adminAttendance, classes: adminClasses, people: adminPeople };
     views[nav.tab](body);
   }
   function withOverview(body, done) {
@@ -414,7 +465,13 @@
       body.removeChild(note);
       var card = el('div', { class: 'card' }, el('h2', { text: 'Today, ' + data.date }),
         el('p', { class: data.students.length ? 'muted' : 'empty', text: data.students.length ? 'Tap a status for each student. You can change today\'s entry any time today.' : 'No students are on your list yet. Open "Students" to add them.' }));
-      data.students.forEach(function (student) {
+      var order = ['MORNING', 'EVENING', ''];
+      var groups = order.map(function (key) { return data.students.filter(function (st) { return (st.session || '') === key; }); });
+      var several = groups.filter(function (g) { return g.length; }).length > 1;
+      groups.forEach(function (list, gi) {
+        if (!list.length) return;
+        if (several) card.appendChild(el('h3', { class: 'group', text: order[gi] ? SESSION_LABEL[order[gi]] + ' class - ' + SESSION_TIME[order[gi]] : 'Session not set' }));
+        list.forEach(function (student) {
         var buttons = el('div', { class: 'seg' });
         ['PRESENT', 'ABSENT', 'EXCUSED'].forEach(function (status) {
           var button = el('button', { text: STATUS_LABEL[status], class: student.status === status ? 'on-' + status : '', 'aria-pressed': student.status === status ? 'true' : 'false' });
@@ -425,7 +482,8 @@
           });
           buttons.appendChild(button);
         });
-        card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name' }, student.name, idTag(student.student_id)), buttons));
+        card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name' }, student.name, idTag(student.student_id), several ? '' : sessionTag(student.session)), buttons));
+        });
       });
       body.appendChild(card);
     });
@@ -443,7 +501,7 @@
   function studentCard(row, showCoach) {
     var open = el('button', { text: 'Open', class: 'primary small' });
     open.addEventListener('click', function () { openProfile(row.student_id); });
-    var line = el('p', { class: 'muted meta' }, row.course ? tag(row.course, 'course') : tag('No course yet', 'warn'),
+    var line = el('p', { class: 'muted meta' }, row.course ? tag(row.course, 'course') : tag('No course yet', 'warn'), sessionTag(row.session),
       row.status && row.status !== 'ENROLLED' ? tag(ENROLL_LABEL[row.status] || row.status, 'warn') : '',
       'Attendance ' + pct(row.attendance_percent) + (row.excused ? ' - Holidays ' + row.excused : ''), showCoach && row.coach ? ' - ' + row.coach : '');
     var place = [row.location, row.profession].filter(Boolean).join(' - ');
@@ -465,17 +523,18 @@
         add.appendChild(el('p', { class: 'muted', text: 'There is no open batch yet. Ask an admin to create this month\'s batch first.' }));
       } else {
         var batch = select(coachBatchOptions(data.batches), '', 'Batch');
+        var sessionPick = select(SESSION_CHOICES, 'MORNING', 'Session of these students');
         var names = el('textarea', { rows: 4, placeholder: 'Asha Raman, 9876543210\nBala Kumar, 9876543211', 'aria-label': 'Students, one per line: name, mobile', spellcheck: 'false' });
         var addButton = el('button', { text: 'Add students', class: 'primary' });
         addButton.addEventListener('click', function () {
           addButton.disabled = true;
-          guarded(api('api_addMyStudents', token, batch.value, names.value), function (result) {
+          guarded(api('api_addMyStudents', token, batch.value, names.value, sessionPick.value), function (result) {
             banner('info', result.created + (result.created === 1 ? ' student added. ID: ' : ' students added. IDs: ') + shortIds(result.ids));
             render();
           }).then(function () { addButton.disabled = false; });
         });
-        add.appendChild(el('p', { class: 'muted', text: 'Choose the batch, then one student per line: name, mobile number. Student IDs are made automatically (like 2634ALPBZ001). Names may repeat. Up to 60 lines.' }));
-        add.appendChild(el('div', { class: 'row' }, batch));
+        add.appendChild(el('p', { class: 'muted', text: 'Choose the batch and the session (morning or evening class), then one student per line: name, mobile number. Student IDs are made automatically (like 2634ALPBZ001). Names may repeat. Up to 60 lines.' }));
+        add.appendChild(el('div', { class: 'row' }, batch, sessionPick));
         add.appendChild(names);
         add.appendChild(el('p', null, addButton));
       }
@@ -513,7 +572,7 @@
       var place = [data.student.location, data.student.profession].filter(Boolean).join(' - ');
       var head = el('div', { class: 'card profile' },
         el('div', { class: 'stu-top' }, el('h2', { class: 'name', text: data.student.name }), idTag(data.student.student_id)),
-        el('p', { class: 'meta' }, data.course ? tag(data.course.name, 'course') : tag('No course yet', 'warn'), data.batch_id ? tag('Batch ' + data.batch_id, '') : '',
+        el('p', { class: 'meta' }, data.course ? tag(data.course.name, 'course') : tag('No course yet', 'warn'), data.batch_id ? tag('Batch ' + data.batch_id, '') : '', sessionTag(data.student.session),
           data.status ? tag(ENROLL_LABEL[data.status] || data.status, data.status === 'ENROLLED' ? 'ok' : 'warn') : '', data.student.active ? '' : tag('Inactive', 'bad')),
         place ? el('p', { class: 'muted', text: place }) : '',
         el('p', { class: 'muted' }, 'Joined ' + (data.student.joined_on || '-') + ' - Coach: ' + (data.student.coach || '-')),
@@ -584,12 +643,13 @@
       var location = el('input', { value: data.student.location, placeholder: 'Location', maxlength: '60', 'aria-label': 'Location' });
       var profession = el('input', { value: data.student.profession, placeholder: 'Profession', maxlength: '80', 'aria-label': 'Profession' });
       var coach = select(coachOptions(ov), student.coach_id, 'Coach');
+      var sessionEdit = select([['', 'Session not set']].concat(SESSION_CHOICES), data.student.session || '', 'Session');
       var active = el('input', { type: 'checkbox', checked: data.student.active, 'aria-label': 'Active' });
       var save = el('button', { text: 'Save changes', class: 'primary' });
       save.addEventListener('click', function () {
-        guarded(api('api_updateStudent', token, data.student.student_id, name.value, coach.value, active.checked, mobile.value, location.value, profession.value), function () { banner('info', 'Saved.'); render(); });
+        guarded(api('api_updateStudent', token, data.student.student_id, name.value, coach.value, active.checked, mobile.value, location.value, profession.value, sessionEdit.value), function () { banner('info', 'Saved.'); render(); });
       });
-      holder.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Edit student' }), el('div', { class: 'row' }, name, mobile, location, profession, coach, el('label', { class: 'row' }, active, 'Active'), save)));
+      holder.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Edit student' }), el('div', { class: 'row' }, name, mobile, location, profession, coach, sessionEdit, el('label', { class: 'row' }, active, 'Active'), save)));
       var status = select(Object.keys(ENROLL_LABEL).map(function (k) { return [k, ENROLL_LABEL[k]]; }), data.status || 'ENROLLED', 'Enrolment status');
       var setStatus = el('button', { text: 'Update status' });
       setStatus.addEventListener('click', function () {
@@ -609,25 +669,42 @@
   }
 
   // ------------------------------------------------------------------ admin: students
+  function importResultCard(r) {
+    var card = el('div', { class: 'card' }, el('h2', { text: 'Import finished' }),
+      el('p', { class: 'ready', text: r.students + ' students imported' + (r.new_coaches.length ? ' and ' + r.new_coaches.length + ' coach accounts created.' : '.') }),
+      el('p', { class: 'muted ready-line', text: 'Batches: ' + r.batches.map(function (b) { return b.batch_id + ' (' + b.students + ')'; }).join(', ') }));
+    if (r.new_coaches.length) {
+      card.appendChild(el('p', { class: 'muted', text: 'Give each coach their login name. Their first PIN is the password from your file; the app asks them to choose their own PIN before anything else.' }));
+      var table = el('table', { class: 'resp' });
+      table.appendChild(el('tr', { class: 'head' }, el('th', { text: 'Coach' }), el('th', { text: 'Login name' }), el('th', { text: 'Students' })));
+      r.new_coaches.forEach(function (c) { table.appendChild(el('tr', null, el('td', { text: c.coach, 'data-label': 'Coach' }), el('td', { text: c.username, 'data-label': 'Login name' }), el('td', { text: String(c.students), 'data-label': 'Students' }))); });
+      card.appendChild(el('div', { class: 'scroll' }, table));
+    }
+    var done = el('button', { text: 'Close this list' });
+    done.addEventListener('click', function () { nav.importResult = null; render(); });
+    card.appendChild(el('p', null, done));
+    return card;
+  }
   function adminStudents(body) {
     withOverview(body, function (ov) {
+      if (nav.importResult) body.appendChild(importResultCard(nav.importResult));
       var add = el('div', { class: 'card' }, el('h2', { text: 'Add students' }));
       var coaches = coachOptions(ov), batches = openBatchOptions(ov);
       if (!coaches.length || !batches.length) {
         add.appendChild(el('p', { class: 'muted', text: !batches.length ? 'Create a course and this month\'s batch first (Classes tab).' : 'Add a coach first (People tab).' }));
       } else {
-        var coach = select(coaches, '', 'Coach'), batch = select(batches, '', 'Batch');
+        var coach = select(coaches, '', 'Coach'), batch = select(batches, '', 'Batch'), sessionPick = select(SESSION_CHOICES, 'MORNING', 'Session of these students');
         var lines = el('textarea', { rows: 5, placeholder: 'Asha Raman, 9876543210\nBala Kumar, 9876543211', 'aria-label': 'Students, one per line: name, mobile', spellcheck: 'false' });
         var addButton = el('button', { text: 'Add students', class: 'primary' });
         addButton.addEventListener('click', function () {
           addButton.disabled = true;
-          guarded(api('api_addStudents', token, batch.value, coach.value, lines.value), function (result) {
+          guarded(api('api_addStudents', token, batch.value, coach.value, lines.value, sessionPick.value), function (result) {
             banner('info', result.created + (result.created === 1 ? ' student added. ID: ' : ' students added. IDs: ') + shortIds(result.ids));
             render();
           }).then(function () { addButton.disabled = false; });
         });
         add.appendChild(el('p', { class: 'muted', text: 'Choose the batch and the coach, then one student per line: name, mobile number. IDs are made automatically (like 2634ALPBZ001); to use your own, add it at the end of the line (it must contain a letter). Names may repeat.' }));
-        add.appendChild(el('div', { class: 'row' }, batch, coach));
+        add.appendChild(el('div', { class: 'row' }, batch, coach, sessionPick));
         add.appendChild(lines);
         add.appendChild(el('p', null, addButton));
       }
@@ -635,52 +712,63 @@
       var importCard = el('div', { class: 'card' }, el('h2', { text: 'Import existing students from your sheet' }));
       if (!batches.length) importCard.appendChild(el('p', { class: 'muted', text: 'Create the course and the batch first (Classes tab), and add the coaches (People tab).' }));
       else {
-        var importBatch = select(batches, '', 'Batch');
+        var importBatch = select([['AUTO', 'Batch: from each student\'s ID (recommended)']].concat(batches), 'AUTO', 'Batch');
+        var importSession = select([['', 'Session: use the sheet\'s Session column, or leave not set']].concat(SESSION_CHOICES), '', 'Session for these students');
         var paste = el('textarea', { rows: 6, placeholder: 'Paste the rows copied from your Google Sheet here, with the heading row', 'aria-label': 'Rows copied from the sheet', spellcheck: 'false' });
         var outcome = el('div');
         var check = el('button', { text: 'Check', class: 'primary' });
         var importNow = el('button', { text: 'Import now', class: 'primary' });
         importNow.disabled = true;
         function reset() { importNow.disabled = true; clear(outcome); }
-        paste.addEventListener('input', reset); importBatch.addEventListener('change', reset);
+        paste.addEventListener('input', reset); importBatch.addEventListener('change', reset); importSession.addEventListener('change', reset);
         check.addEventListener('click', function () {
           check.disabled = true;
-          guarded(api('api_importStudents', token, importBatch.value, paste.value, false), function (r) {
+          guarded(api('api_importStudents', token, importBatch.value, paste.value, false, importSession.value), function (r) {
             clear(outcome);
-            outcome.appendChild(el('p', { class: 'ready', text: r.students + ' students are ready to import into batch ' + r.batch_id + ':' }));
-            r.coaches.forEach(function (c) { outcome.appendChild(el('p', { class: 'muted ready-line', text: c.coach + ' - ' + c.students })); });
+            outcome.appendChild(el('p', { class: 'ready', text: r.students + ' students are ready to import' + (r.batch_id === 'AUTO' ? '.' : ' into batch ' + r.batch_id + '.') }));
+            outcome.appendChild(el('p', { class: 'muted ready-line', text: 'Batches: ' + r.batches.map(function (b) { return b.batch_id + ' (' + b.students + ')'; }).join(', ') }));
+            var made = {};
+            r.new_coaches.forEach(function (c) { made[c.coach] = true; });
+            var existing = r.coaches.filter(function (c) { return !made[c.coach]; });
+            if (existing.length) outcome.appendChild(el('p', { class: 'muted ready-line', text: 'Existing coaches: ' + existing.map(function (c) { return c.coach + ' (' + c.students + ')'; }).join(', ') }));
+            if (r.new_coaches.length) {
+              outcome.appendChild(el('p', { class: 'ready', text: r.new_coaches.length + ' new coach accounts will be created. Login names:' }));
+              r.new_coaches.forEach(function (c) { outcome.appendChild(el('p', { class: 'muted ready-line', text: c.coach + ' - login ' + c.username + ' - ' + c.students + ' students' })); });
+            }
             importNow.disabled = false;
           }).then(function () { check.disabled = false; });
         });
         importNow.addEventListener('click', function () {
           importNow.disabled = true;
-          guarded(api('api_importStudents', token, importBatch.value, paste.value, true), function (r) { banner('info', r.students + ' students imported with their IDs.'); render(); }).then(function () { importNow.disabled = false; });
+          guarded(api('api_importStudents', token, importBatch.value, paste.value, true, importSession.value), function (r) { nav.importResult = r; banner('info', r.students + ' students imported with their IDs.'); render(); }).then(function () { importNow.disabled = false; });
         });
-        importCard.appendChild(el('p', { class: 'muted', text: 'In your Google Sheet select the student rows (Sno, COACH, REG NOID, Name, Location, profession ...), copy them together with the heading row, and paste them below. Coaches are matched by name, so add the coaches first. Student IDs are kept exactly as written; mobile numbers are not needed. Press Check first: nothing is saved until you press Import now.' }));
-        importCard.appendChild(el('div', { class: 'row' }, importBatch)); importCard.appendChild(paste); importCard.appendChild(outcome);
+        importCard.appendChild(el('p', { class: 'muted', text: 'Paste the rows from your sheet, or the whole CSV file, with the heading row. Needed: COACH, REG NOID (the student ID, kept exactly as written) and Student Name. Add a COACH Password column to create coaches that do not exist yet: their login name is made from their name, and the password is a first PIN that each coach must replace at the first sign-in. "From each student\'s ID" puts every student in the batch their ID shows (2634ALPBZ050 goes to batch 2634BZ), so create those batches first. A Session column, or the choice below, sets the session; otherwise it stays not set. Press Check: nothing is saved until you press Import now.' }));
+        importCard.appendChild(el('div', { class: 'row' }, importBatch, importSession)); importCard.appendChild(paste); importCard.appendChild(outcome);
         importCard.appendChild(el('div', { class: 'row gap' }, check, importNow));
       }
       body.appendChild(importCard);
       var list = el('div', { class: 'card' }, el('h2', { text: 'All students (' + ov.students.length + ')' }));
       var search = el('input', { type: 'search', placeholder: 'Search name, ID, mobile, location', 'aria-label': 'Search students' });
+      var sessionFilter = select([['', 'All sessions'], ['MORNING', 'Morning'], ['EVENING', 'Evening'], ['NONE', 'Session not set']], nav.session || '', 'Show only one session');
       var rows = el('div');
       var coachName = {};
       ov.people.forEach(function (p) { coachName[p.user_id] = p.name; });
       function paint() {
         clear(rows);
         var q = search.value.trim().toLowerCase();
-        var shown = ov.students.filter(function (s) { return !q || (s.name + ' ' + s.student_id + ' ' + s.mobile + ' ' + s.location + ' ' + s.profession).toLowerCase().indexOf(q) >= 0; });
+        var wanted = sessionFilter.value;
+        var shown = ov.students.filter(function (s) { return (!wanted || (wanted === 'NONE' ? !s.session : s.session === wanted)) && (!q || (s.name + ' ' + s.student_id + ' ' + s.mobile + ' ' + s.location + ' ' + s.profession).toLowerCase().indexOf(q) >= 0); });
         shown.forEach(function (s) {
           var open = el('button', { text: 'Open', class: 'small' });
           open.addEventListener('click', function () { openProfile(s.student_id); });
           rows.appendChild(el('div', { class: 'student' },
-            el('span', { class: 'name' }, s.name, idTag(s.student_id), s.active ? '' : tag('Inactive', 'bad'),
+            el('span', { class: 'name' }, s.name, idTag(s.student_id), sessionTag(s.session), s.active ? '' : tag('Inactive', 'bad'),
               el('span', { class: 'muted sub', text: (coachName[s.coach_id] || '') + (s.batch_id ? ' - batch ' + s.batch_id : ' - no batch') + (s.mobile ? ' - ' + s.mobile : '') + (s.location ? ' - ' + s.location : '') })), open));
         });
         if (!shown.length) rows.appendChild(el('p', { class: 'empty', text: ov.students.length ? 'Nobody matches your search.' : 'No students yet.' }));
       }
-      search.addEventListener('input', paint);
-      list.appendChild(search); list.appendChild(rows);
+      search.addEventListener('input', paint); sessionFilter.addEventListener('change', paint);
+      list.appendChild(el('div', { class: 'row' }, search, sessionFilter)); list.appendChild(rows);
       body.appendChild(list);
       paint();
     });
@@ -695,11 +783,13 @@
       if (!ov.batches.length) compare.appendChild(el('p', { class: 'muted', text: 'Create a course and a batch first.' }));
       else {
         var pick = select(ov.batches.map(function (b) { return [b.batch_id, b.batch_id + ' - ' + b.course + (b.active ? '' : ' (closed)')]; }), '', 'Batch');
+        var sessionCompare = select([['', 'Both sessions'], ['MORNING', 'Morning only'], ['EVENING', 'Evening only']], nav.compare || '', 'Session');
         var show = el('button', { text: 'Show', class: 'primary' });
         var out = el('div');
-        function load() { guarded(api('api_batchReport', token, pick.value), function (report) { renderBatchReport(out, report); }); }
+        function load() { guarded(api('api_batchReport', token, pick.value, sessionCompare.value), function (report) { renderBatchReport(out, report); }); }
         show.addEventListener('click', load);
-        compare.appendChild(el('div', { class: 'row' }, pick, show));
+        sessionCompare.addEventListener('change', load); pick.addEventListener('change', load);
+        compare.appendChild(el('div', { class: 'row' }, pick, sessionCompare, show));
         compare.appendChild(out);
         setTimeout(load, 0);
       }
@@ -792,6 +882,73 @@
     out.appendChild(el('div', { class: 'scroll' }, coachTable));
   }
 
+  // ------------------------------------------------------------------ admin: home (the morning and the evening session)
+  function dateLabel(iso) { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(iso + 'T00:00:00Z').getUTCDay()] + ' ' + Number(iso.slice(8, 10)) + ' ' + MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3); }
+  function metric(label, percent) { return el('div', { class: 'metric' }, el('span', { class: 'muted', text: label }), meter(percent), el('b', { text: pct(percent) })); }
+  function sessionCard(s, live) {
+    var marked = s.students - s.today.NOT_RECORDED;
+    var card = el('div', { class: 'card sess ' + (s.key ? s.key.toLowerCase() : 'unset') });
+    card.appendChild(el('div', { class: 'sess-head' },
+      el('span', { class: 'sess-badge', text: s.key === 'MORNING' ? 'AM' : s.key === 'EVENING' ? 'PM' : '?' }),
+      el('div', { class: 'sess-title' }, el('h2', { text: s.label }), el('small', { class: 'muted', text: s.time || 'Give each student a session so they appear in a class' })),
+      live ? tag('On now', 'ok') : ''));
+    card.appendChild(el('div', { class: 'stats' }, stat('NOT_RECORDED', s.students, 'Students'), stat('NOT_RECORDED', s.coaches.length, 'Coaches'), stat('PRESENT', s.today.PRESENT, 'Present today'), stat('ABSENT', s.today.ABSENT, 'Absent today')));
+    if (s.students) {
+      card.appendChild(metric('Marked today', Math.round(100 * marked / s.students)));
+      card.appendChild(el('p', { class: 'muted small-line', text: 'Excused ' + s.today.EXCUSED + ' - not marked yet ' + s.today.NOT_RECORDED }));
+      card.appendChild(metric('Lesson progress', s.progress_percent));
+      card.appendChild(metric('Attendance', s.attendance_percent));
+      var chips = el('div', { class: 'chips' });
+      s.coaches.forEach(function (c) { chips.appendChild(el('span', { class: 'coachchip', text: c.coach + ' (' + c.students + ')' })); });
+      card.appendChild(el('p', { class: 'muted small-line', text: 'Coaches' })); card.appendChild(chips);
+      card.appendChild(el('h3', { class: 'group', text: s.attention_count ? 'Needs attention (' + s.attention_count + ')' : 'Needs attention' }));
+      if (!s.attention_count) card.appendChild(el('p', { class: 'muted small-line', text: 'Nobody needs attention right now.' }));
+      s.attention.forEach(function (a) {
+        var flags = el('span', { class: 'flags' });
+        a.flags.forEach(function (f) { flags.appendChild(tag(FLAG_LABEL[f] || f, 'bad')); });
+        var open = el('button', { text: 'Open', class: 'small' });
+        open.addEventListener('click', function () { openProfile(a.student_id); });
+        card.appendChild(el('div', { class: 'attn' }, el('span', { class: 'attn-name' }, a.name, el('span', { class: 'muted sub', text: a.coach })), flags, open));
+      });
+      if (s.attention_count > s.attention.length) card.appendChild(el('p', { class: 'muted small-line', text: 'and ' + (s.attention_count - s.attention.length) + ' more' }));
+    }
+    var actions = el('div', { class: 'row gap' });
+    var view = el('button', { text: 'View students', class: 'small' });
+    view.addEventListener('click', function () { nav.tab = 'students'; nav.profile = ''; nav.session = s.key || 'NONE'; render(); });
+    actions.appendChild(view);
+    if (s.key) {
+      var compare = el('button', { text: 'Compare class', class: 'small' });
+      compare.addEventListener('click', function () { nav.tab = 'classes'; nav.profile = ''; nav.compare = s.key; render(); });
+      actions.appendChild(compare);
+    }
+    card.appendChild(actions);
+    return card;
+  }
+  function adminHome(body) {
+    var note = loading(body);
+    guarded(api('api_adminHome', token), function (home) {
+      body.removeChild(note);
+      var nowLine = home.current ? SESSION_LABEL[home.current] + ' class is on now (' + SESSION_TIME[home.current] + ')' : 'Next: ' + SESSION_LABEL[home.next] + ' class, ' + SESSION_TIME[home.next];
+      body.appendChild(el('div', { class: 'card clockcard' },
+        el('div', { class: 'clock-row' }, el('span', { class: 'live' + (home.current ? ' on' : '') }), el('b', { text: nowLine })),
+        el('p', { class: 'muted', text: dateLabel(home.date) + ', ' + home.time + ' India time - ' + home.students + ' enrolled students' })));
+      var grid = el('div', { class: 'sess-grid' });
+      home.sessions.forEach(function (s) { if (s.key || s.students) grid.appendChild(sessionCard(s, !!s.key && home.current === s.key)); });
+      body.appendChild(grid);
+      if (!home.students) body.appendChild(el('div', { class: 'card' }, el('p', { class: 'empty', text: 'No enrolled students yet. Add or import students (Students tab) and give each a session.' })));
+      var morning = home.sessions[0], evening = home.sessions[1];
+      if (morning.students || evening.students) {
+        var measures = [['Students', function (s) { return String(s.students); }], ['Coaches', function (s) { return String(s.coaches.length); }], ['Present today', function (s) { return String(s.today.PRESENT); }],
+          ['Not marked yet', function (s) { return String(s.today.NOT_RECORDED); }], ['Average lesson progress', function (s) { return pct(s.progress_percent); }], ['Average attendance', function (s) { return pct(s.attendance_percent); }],
+          ['Needs attention', function (s) { return String(s.attention_count); }]];
+        var table = el('table', { class: 'resp compare' });
+        table.appendChild(el('tr', { class: 'head' }, el('th', { text: '' }), el('th', { text: 'Morning' }), el('th', { text: 'Evening' })));
+        measures.forEach(function (m) { table.appendChild(el('tr', null, el('td', { text: m[0], 'data-label': '' }), el('td', { text: m[1](morning), 'data-label': 'Morning' }), el('td', { text: m[1](evening), 'data-label': 'Evening' }))); });
+        body.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Morning and evening side by side' }), el('div', { class: 'scroll' }, table)));
+      }
+    });
+  }
+
   // ------------------------------------------------------------------ admin: attendance (report and export)
   function adminAttendance(body) { renderReport(body, todayString()); renderExport(body); }
 
@@ -836,7 +993,7 @@
           guarded(api('api_setPersonActive', token, person.user_id, !person.active), function () { banner('info', 'Updated.'); render(); });
         });
         list.appendChild(el('div', { class: 'person' },
-          el('span', { class: 'name' }, person.name, el('span', { class: 'badge', text: person.role === 'ADMIN' ? 'Admin' : 'Coach' }), el('span', { class: 'muted', text: '  @' + person.username + (person.active ? '' : '  (inactive)') })),
+          el('span', { class: 'name' }, person.name, el('span', { class: 'badge', text: person.role === 'ADMIN' ? 'Admin' : 'Coach' }), person.temp_pin ? tag('First PIN not changed yet', 'warn') : '', el('span', { class: 'muted', text: '  @' + person.username + (person.active ? '' : '  (inactive)') })),
           el('div', { class: 'row' }, phone, phoneButton), el('div', { class: 'row' }, resetInput, resetButton, toggle)));
       });
       body.appendChild(list);
@@ -862,7 +1019,7 @@
         });
         out.appendChild(summary);
         var table = el('table', { class: 'resp' });
-        table.appendChild(el('tr', { class: 'head' }, el('th', { text: 'ID' }), el('th', { text: 'Student' }), el('th', { text: 'Coach' }), el('th', { text: 'Status' }), el('th', { text: 'Marked by' })));
+        table.appendChild(el('tr', { class: 'head' }, el('th', { text: 'ID' }), el('th', { text: 'Student' }), el('th', { text: 'Session' }), el('th', { text: 'Coach' }), el('th', { text: 'Status' }), el('th', { text: 'Marked by' })));
         report.rows.forEach(function (row) {
           var select = el('select', { 'aria-label': 'Status for ' + row.student });
           [['', 'Not recorded']].concat(['PRESENT', 'ABSENT', 'EXCUSED'].map(function (s) { return [s, STATUS_LABEL[s]]; })).forEach(function (opt) {
@@ -872,7 +1029,7 @@
             if (!select.value) { select.value = row.status; banner('error', 'An entry can be changed but not removed.'); return; }
             guarded(api('api_adminSetAttendance', token, report.date, row.student_id, select.value), function () { banner('info', 'Saved.'); load(); });
           });
-          table.appendChild(el('tr', null, el('td', { text: row.student_id, class: 'muted', 'data-label': 'ID' }), el('td', { text: row.student, 'data-label': 'Student' }), el('td', { text: row.coach, 'data-label': 'Coach' }), el('td', { 'data-label': 'Status' }, select), el('td', { class: 'muted', text: row.marked_by, 'data-label': 'Marked by' })));
+          table.appendChild(el('tr', null, el('td', { text: row.student_id, class: 'muted', 'data-label': 'ID' }), el('td', { text: row.student, 'data-label': 'Student' }), el('td', { text: SESSION_LABEL[row.session] || '-', class: 'muted', 'data-label': 'Session' }), el('td', { text: row.coach, 'data-label': 'Coach' }), el('td', { 'data-label': 'Status' }, select), el('td', { class: 'muted', text: row.marked_by, 'data-label': 'Marked by' })));
         });
         out.appendChild(el('div', { class: 'scroll' }, table));
       });
@@ -883,8 +1040,8 @@
 
   // ------------------------------------------------------------------ export (admin only: the data comes from an admin-only server function)
   var LABEL_ALL = { PRESENT: 'Present', ABSENT: 'Absent', EXCUSED: 'Excused', NOT_RECORDED: 'Not recorded' };
-  var COLUMNS = [['Date', 'date', 12], ['Student ID', 'student_id', 14], ['Student', 'student', 28], ['Coach', 'coach', 24], ['Status', 'status', 14], ['Marked by', 'marked_by', 24], ['Marked at (IST)', 'marked_at', 18]];
-  function cellText(row, key) { return key === 'status' ? LABEL_ALL[row.status] : row[key]; }
+  var COLUMNS = [['Date', 'date', 12], ['Student ID', 'student_id', 14], ['Student', 'student', 28], ['Session', 'session', 10], ['Coach', 'coach', 24], ['Status', 'status', 14], ['Marked by', 'marked_by', 24], ['Marked at (IST)', 'marked_at', 18]];
+  function cellText(row, key) { return key === 'status' ? LABEL_ALL[row.status] : key === 'session' ? (SESSION_LABEL[row.session] || '') : row[key]; }
   function download(name, blob) {
     var url = URL.createObjectURL(blob);
     var link = el('a', { href: url, download: name });
@@ -976,7 +1133,7 @@
     if (!saved) { $('loginView').classList.remove('hidden'); return; }
     token = saved;
     $('resumeView').classList.remove('hidden');
-    api('api_me', token).then(function (info) { $('resumeView').classList.add('hidden'); me = info; showApp(); })
+    api('api_me', token).then(function (info) { $('resumeView').classList.add('hidden'); me = info; me.mustChange = !!info.must_change_pin; showApp(); })
       .catch(function (error) {
         $('resumeView').classList.add('hidden');
         if (/sign in again/i.test(error.message)) { signedOut(); return; }
@@ -987,7 +1144,7 @@
   $('loginBtn').addEventListener('click', function () {
     var button = $('loginBtn'); button.disabled = true;
     guarded(api('api_login', $('loginUser').value, $('loginPin').value, $('rememberMe').checked), function (result) {
-      saveToken(result.token, result.remember); me = { name: result.name, role: result.role }; $('loginPin').value = ''; showApp();
+      saveToken(result.token, result.remember); me = { name: result.name, role: result.role, mustChange: !!result.must_change_pin }; $('loginPin').value = ''; showApp();
     }).then(function () { button.disabled = false; });
   });
   $('loginPin').addEventListener('keydown', function (event) { if (event.key === 'Enter') $('loginBtn').click(); });
