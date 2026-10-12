@@ -193,6 +193,18 @@
   .ready { margin: 10px 0 4px; font-weight: 600; color: #1f5f43; }
   .tag.morning { background: #fff0cc; color: #8a5a00; }
   .tag.evening { background: #ece7f7; color: #4a3a86; }
+  .batch { padding: 0; overflow: hidden; }
+  .batch-head { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; width: 100%; text-align: left; background: var(--card); border: 0; border-radius: 0; padding: 14px 16px; min-height: 64px; color: var(--ink); box-shadow: none; }
+  .batch-head .bh-main { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .batch-head .bh-title { font-weight: 700; font-size: 1.05rem; }
+  .batch-head .meta { grid-column: 1; }
+  .batch-head .bh-arrow { grid-column: 2; grid-row: 1 / span 2; font-size: .85rem; color: var(--accent-dark); font-weight: 600; }
+  .batch-body { padding: 4px 12px 12px; border-top: 1px solid var(--line); background: var(--bg, #fffaf4); }
+  .batch-body .stu-card { margin: 10px 0 0; }
+  .bulk { padding: 10px 4px 2px; }
+  .bulk select { flex: 1 1 140px; }
+  .sess-pick { justify-content: space-between; }
+  .sess-pick select { flex: 1 1 60%; }
   h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
   .coach-row + h3.group, .card > h3.group:first-of-type { margin-top: 10px; }
   .clockcard .clock-row { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
@@ -290,7 +302,11 @@
       else if (key.slice(0, 2) === 'on') node.addEventListener(key.slice(2), props[key]);
       else if (props[key] !== false && props[key] !== null && props[key] !== undefined) node.setAttribute(key, props[key] === true ? '' : props[key]);
     });
-    for (var i = 2; i < arguments.length; i++) { var child = arguments[i]; if (child) node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child); }
+    var add = function (child) {                                 // a child may be text, an element, or a list of those (empty entries are skipped)
+      if (Array.isArray(child)) child.forEach(add);
+      else if (child) node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+    };
+    for (var i = 2; i < arguments.length; i++) add(arguments[i]);
     return node;
   }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
@@ -371,6 +387,10 @@
   function tag(text, kind) { return el('span', { class: 'tag' + (kind ? ' ' + kind : ''), text: text }); }
   function idTag(id) { return el('span', { class: 'idtag', text: id }); }
   function sessionTag(key) { return key ? tag(SESSION_LABEL[key] || key, key.toLowerCase()) : ''; }
+  // The batch number is inside the batch ID: 2634BZ is batch 34 of 2026.
+  function batchNumber(id) { var m = /^(\d{2})(\d{2,})[A-Z]*$/.exec(id || ''); return m ? Number(m[2]) : null; }
+  function batchTitle(id) { var n = batchNumber(id); return id ? (n === null ? 'Batch ' + id : 'Batch ' + n) : 'No batch yet'; }
+  function batchTag(id) { return id ? tag(batchTitle(id), 'course') : ''; }
   function pct(value) { return value === null || value === undefined ? '-' : value + '%'; }
   function meter(percent) {
     var node = el('span', { class: 'meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' }, el('span', { class: 'fill' }));
@@ -394,7 +414,7 @@
   function shortIds(ids) { return ids.length > 6 ? ids.slice(0, 6).join(', ') + ' and ' + (ids.length - 6) + ' more' : ids.join(', '); }
 
   // ------------------------------------------------------------------ app shell: tabs, navigation
-  var nav = { tab: '', profile: '', back: '', session: '', compare: '' };
+  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {} };
 
   function signedOut() {
     saveToken(''); me = null;
@@ -412,7 +432,7 @@
     $('avatar').textContent = (me.name || '?').trim().charAt(0).toUpperCase();
     $('roleLine').textContent = isAdmin() ? 'Administrator' : 'Coach';
     if (me.mustChange) { showPinGate(); return; }
-    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '' };
+    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {} };
     render();
   }
   // A PIN chosen by an administrator is temporary: nothing else works until the person has chosen their own.
@@ -482,7 +502,7 @@
           });
           buttons.appendChild(button);
         });
-        card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name' }, student.name, idTag(student.student_id), several ? '' : sessionTag(student.session)), buttons));
+        card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name' }, student.name, idTag(student.student_id), batchTag(student.batch_id), several ? '' : sessionTag(student.session)), buttons));
         });
       });
       body.appendChild(card);
@@ -498,7 +518,7 @@
   }
 
   // ------------------------------------------------------------------ coach: my students
-  function studentCard(row, showCoach) {
+  function studentCard(row, showCoach, onSession) {
     var open = el('button', { text: 'Open', class: 'primary small' });
     open.addEventListener('click', function () { openProfile(row.student_id); });
     var line = el('p', { class: 'muted meta' }, row.course ? tag(row.course, 'course') : tag('No course yet', 'warn'), sessionTag(row.session),
@@ -512,6 +532,11 @@
       el('div', { class: 'stu-progress' }, meter(row.progress_percent), el('span', { class: 'muted', text: (row.total ? row.done + ' of ' + row.total + ' lessons - ' + pct(row.progress_percent) : 'No lessons yet') + (row.videos_total ? ' - Videos ' + row.videos_done + '/' + row.videos_total : '') })),
       row.decision ? el('p', { class: 'meta' }, tag(DECISION_LABEL[row.decision], row.decision === 'NEEDS_SUPPORT' ? 'bad' : 'info')) : '',
       el('div', { class: 'row' }, callLink(row.mobile)));
+    if (onSession) {                                           // a coach can move the student between the morning and evening classes
+      var pick = select([['', 'Session not set'], ['MORNING', 'Morning class'], ['EVENING', 'Evening class']], row.session || '', 'Session of ' + row.name);
+      pick.addEventListener('change', function () { onSession([row], pick.value, pick); });
+      card.appendChild(el('label', { class: 'row sess-pick' }, el('span', { class: 'muted', text: 'Class' }), pick));
+    }
     return card;
   }
   function coachStudents(body) {
@@ -538,10 +563,56 @@
         add.appendChild(names);
         add.appendChild(el('p', null, addButton));
       }
+      var summary = el('div');
       var list = el('div');
-      data.students.forEach(function (row) { list.appendChild(studentCard(row, false)); });
-      if (!data.students.length) list.appendChild(el('div', { class: 'card' }, el('p', { class: 'empty', text: 'You have no students yet. Add them below.' })));
-      body.appendChild(el('h2', { class: 'section', text: data.students.length + (data.students.length === 1 ? ' student' : ' students') }));
+      // Saves the session of one or many students, then repaints the lists from what is already on the screen.
+      function saveSession(rows, value, control) {
+        if (control) control.disabled = true;
+        guarded(api('api_setSessions', token, rows.map(function (r) { return r.student_id; }), value), function (result) {
+          rows.forEach(function (r) { r.session = value; });
+          banner('info', result.updated + (result.updated === 1 ? ' student' : ' students') + ' set to ' + (value ? SESSION_LABEL[value] + ' class' : 'session not set') + '.');
+          paint();
+        }).then(function () { if (control) control.disabled = false; });
+      }
+      function paint() {
+        clear(summary); clear(list);
+        var total = data.students.length;
+        var groups = {};
+        data.students.forEach(function (r) { (groups[r.batch_id || ''] = groups[r.batch_id || ''] || []).push(r); });
+        var keys = Object.keys(groups).sort(function (a, b) {
+          if (!a || !b) return a ? -1 : 1;                                       // students without a batch last
+          return (batchNumber(a) === null ? 1e9 : batchNumber(a)) - (batchNumber(b) === null ? 1e9 : batchNumber(b)) || (a < b ? -1 : 1);
+        });
+        var count = function (rows, key) { return rows.filter(function (r) { return (r.session || '') === key; }).length; };
+        var sessionTags = function (rows) {
+          return [count(rows, 'MORNING') ? tag('Morning ' + count(rows, 'MORNING'), 'morning') : '', count(rows, 'EVENING') ? tag('Evening ' + count(rows, 'EVENING'), 'evening') : '',
+            count(rows, '') ? tag('Not set ' + count(rows, ''), 'warn') : ''];
+        };
+        summary.appendChild(el('h2', { class: 'section', text: total + (total === 1 ? ' student' : ' students') + (keys.length > 1 ? ' in ' + keys.length + ' batches' : '') }));
+        if (total) summary.appendChild(el('p', { class: 'meta' }, sessionTags(data.students)));
+        keys.forEach(function (key) {
+          var rows = groups[key];
+          var isOpen = nav.openBatches[key] === undefined ? keys.length === 1 : nav.openBatches[key];
+          var head = el('button', { class: 'batch-head', 'aria-expanded': isOpen ? 'true' : 'false' },
+            el('span', { class: 'bh-main' }, el('span', { class: 'bh-title', text: batchTitle(key) }), tag(rows.length + (rows.length === 1 ? ' student' : ' students'), 'info')),
+            el('span', { class: 'meta' }, key ? el('span', { class: 'muted', text: key + (rows[0].course ? ' - ' + rows[0].course : '') }) : '', sessionTags(rows)),
+            el('span', { class: 'bh-arrow', text: isOpen ? 'Hide' : 'Show' }));
+          var inner = el('div', { class: isOpen ? 'batch-body' : 'batch-body hidden' });
+          var all = select([['', 'Session not set'], ['MORNING', 'Morning class'], ['EVENING', 'Evening class']], 'MORNING', 'Session for every student in ' + batchTitle(key));
+          var apply = el('button', { text: 'Apply to all ' + rows.length, class: 'small' });
+          apply.addEventListener('click', function () { saveSession(rows, all.value, apply); });
+          if (rows.length > 1) inner.appendChild(el('div', { class: 'row bulk' }, el('span', { class: 'muted', text: 'Set every student in this batch to' }), all, apply));
+          rows.forEach(function (row) { inner.appendChild(studentCard(row, false, saveSession)); });
+          head.addEventListener('click', function () {
+            nav.openBatches[key] = inner.classList.contains('hidden');
+            paint();
+          });
+          list.appendChild(el('div', { class: 'card batch' }, head, inner));
+        });
+        if (!total) list.appendChild(el('div', { class: 'card' }, el('p', { class: 'empty', text: 'You have no students yet. Add them below.' })));
+      }
+      paint();
+      body.appendChild(summary);
       body.appendChild(list);
       body.appendChild(add);
     });
@@ -968,7 +1039,7 @@
       add.appendChild(el('div', { class: 'row' }, username, display, mobile, role, pin, addButton));
       body.appendChild(add);
       var many = el('div', { class: 'card' }, el('h2', { text: 'Add many coaches at once' }),
-        el('p', { class: 'muted', text: 'One coach per line: username, full name, mobile, PIN (6-12 digits). Example: priya, Priya Raman, 9876543210, 482913. Nothing is saved unless every line is valid.' }));
+        el('p', { class: 'muted', text: 'One coach per line: username, full name, mobile, PIN (6-12 digits). The mobile may be left empty: priya, Priya Raman, , 482913. Each coach must choose their own PIN at the first sign-in. Nothing is saved unless every line is valid.' }));
       var lines = el('textarea', { rows: 6, placeholder: 'priya, Priya Raman, 9876543210, 482913\nravi, Ravi Kumar, 9876543211, 730264', 'aria-label': 'Coaches, one per line', spellcheck: 'false' });
       var manyButton = el('button', { text: 'Add all coaches', class: 'primary' });
       manyButton.addEventListener('click', function () {
