@@ -229,6 +229,9 @@
   @media (max-width: 700px) { .student.compact > button { flex: 0 0 auto; } .student.compact .name { flex: 1 1 0; min-width: 0; } }
   .picker { display: grid; gap: 6px; flex: 1 1 100%; }
   .picker select, .picker input { width: 100%; }
+  .movelist { margin: 8px 0; }
+  .moverow { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .moverow .name { font-weight: 600; flex: 1; }
   .confirm { margin-top: 6px; }
   .warn-text { margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: #fbeceb; color: var(--bad); font-weight: 600; }
   h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
@@ -510,7 +513,7 @@
       var cancel = el('button', { text: 'Cancel', class: 'ghost' });
       yes.addEventListener('click', function () { yes.disabled = true; cancel.disabled = true; action(function () { yes.disabled = false; cancel.disabled = false; }); });
       cancel.addEventListener('click', idle);
-      holder.appendChild(el('p', { class: 'warn-text', text: warning }));
+      holder.appendChild(el('p', { class: 'warn-text', text: typeof warning === 'function' ? warning() : warning }));
       holder.appendChild(el('div', { class: 'row' }, yes, cancel));
     }
     function idle() { clear(holder); var start = el('button', { text: label, class: 'danger' }); start.addEventListener('click', ask); holder.appendChild(start); }
@@ -639,7 +642,7 @@
       place ? el('p', { class: 'muted meta', text: place }) : '',
       el('div', { class: 'stu-progress' }, meter(row.progress_percent), el('span', { class: 'muted', text: (row.total ? row.done + ' of ' + row.total + ' lessons - ' + pct(row.progress_percent) : 'No lessons yet') + (row.videos_total ? ' - Videos ' + row.videos_done + '/' + row.videos_total : '') })),
       row.decision ? el('p', { class: 'meta' }, tag(DECISION_LABEL[row.decision], row.decision === 'NEEDS_SUPPORT' ? 'bad' : 'info')) : '',
-      el('div', { class: 'row' }, callLink(row.mobile)));
+      el('div', { class: 'row' }, row.mobile || !onSession ? callLink(row.mobile) : el('button', { text: 'Add mobile number', class: 'small', onclick: function () { openProfile(row.student_id); } })));
     if (onSession) {                                           // a coach can move the student between the morning and evening classes
       var pick = select([['', 'Session not set'], ['MORNING', 'Morning class'], ['EVENING', 'Evening class']], row.session || '', 'Session of ' + row.name);
       pick.addEventListener('change', function () { onSession([row], pick.value, pick); });
@@ -758,6 +761,17 @@
         el('div', { class: 'row' }, callLink(data.student.mobile), admin && data.student.coach_mobile ? el('a', { class: 'call', href: 'tel:' + data.student.coach_mobile, text: 'Call coach' }) : ''),
         el('div', { class: 'stu-progress' }, progressMeter, progressText), videoText);
       body.appendChild(head);
+      if (!admin) {                                              // a coach adds or corrects the number of their own student
+        var phone = el('input', { value: data.student.mobile, inputmode: 'tel', placeholder: 'Mobile number (10 digits)', maxlength: '20', 'aria-label': 'Mobile number of ' + data.student.name });
+        var savePhone = el('button', { text: data.student.mobile ? 'Save number' : 'Add number', class: 'primary' });
+        savePhone.addEventListener('click', function () {
+          savePhone.disabled = true;
+          guarded(api('api_setStudentMobile', token, data.student.student_id, phone.value), function (result) { banner('info', result.mobile ? 'Mobile number saved.' : 'Mobile number removed.'); render(); }).then(function () { savePhone.disabled = false; });
+        });
+        body.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Mobile number' }),
+          data.student.mobile ? '' : el('p', { class: 'muted', text: 'There is no number for this student yet. Add it here so you can call them.' }),
+          el('div', { class: 'row' }, phone, savePhone)));
+      }
       // --- lessons and review videos: the same tick-list for both
       function checklist(title, items, noun, emptyText) {
         var card = el('div', { class: 'card' }, el('h2', { text: title }));
@@ -1249,6 +1263,7 @@
       body.appendChild(many);
       var counts = {};
       ov.students.forEach(function (st) { if (st.active) counts[st.coach_id] = (counts[st.coach_id] || 0) + 1; });
+      body.appendChild(moveStudentsCard(ov, counts));
       var roleReport = select([['', 'Everyone'], ['COACH', 'Coaches only'], ['ADMIN', 'Admins only']], '', 'Who to include');
       var teamCard = el('div', { class: 'card' }, el('h2', { text: 'Report' }), el('p', { class: 'muted', text: 'Name, login name, role, mobile, status and the number of active students, as Excel or PDF.' }), el('div', { class: 'row' }, roleReport),
         exportBar(function () {
@@ -1289,6 +1304,71 @@
       });
       body.appendChild(list);
     });
+  }
+
+  // Moving students from one coach to another: choose the coach, tick the students, choose the new coach. Only the coach changes; all their records stay.
+  function moveStudentsCard(ov, counts) {
+    var card = el('div', { class: 'card' }, el('h2', { text: 'Move students to another coach' }),
+      el('p', { class: 'muted', text: 'For a student who wants a different coach, or when a coach leaves. Attendance, lessons, reviews, batch and all details stay with the student; only the coach changes.' }));
+    var coaches = ov.people.filter(function (p) { return p.role === 'COACH' && p.active; }).sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; });
+    var withStudents = coaches.filter(function (c) { return ov.students.some(function (st) { return st.coach_id === c.user_id; }); });
+    if (coaches.length < 2 || !withStudents.length) { card.appendChild(el('p', { class: 'muted', text: coaches.length < 2 ? 'Add at least two coaches to move students between them.' : 'No coach has students yet.' })); return card; }
+    var fromPick = select([['', 'Move students from...']].concat(withStudents.map(function (c) { return [c.user_id, c.name + ' (' + ov.students.filter(function (st) { return st.coach_id === c.user_id && st.active; }).length + ')']; })), '', 'Move students from this coach');
+    var batchPick = select([['', 'All batches']], '', 'Only students of this batch');
+    var listBox = el('div', { class: 'movelist' });
+    var toBox = el('div');
+    var ticked = {};
+    card.appendChild(el('div', { class: 'row' }, fromPick, batchPick));
+    card.appendChild(listBox); card.appendChild(toBox);
+    function mine() { return ov.students.filter(function (st) { return st.coach_id === fromPick.value; }).sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; }); }
+    function shown() { return mine().filter(function (st) { return !batchPick.value || (batchPick.value === 'NONE' ? !st.batch_id : st.batch_id === batchPick.value); }); }
+    function paintBatches() {
+      clear(batchPick);
+      var seen = {}, rows = mine();
+      rows.forEach(function (st) { seen[st.batch_id || 'NONE'] = (seen[st.batch_id || 'NONE'] || 0) + 1; });
+      [['', 'All batches (' + rows.length + ')']].concat(Object.keys(seen).sort(function (a, b) { return (batchNumber(a) || 0) - (batchNumber(b) || 0); }).map(function (id) { return [id, (id === 'NONE' ? 'No batch' : batchTitle(id)) + ' (' + seen[id] + ')']; }))
+        .forEach(function (opt) { batchPick.appendChild(el('option', { value: opt[0], text: opt[1] })); });
+    }
+    function paint() {
+      clear(listBox); clear(toBox);
+      if (!fromPick.value) return;
+      var rows = shown();
+      var chosenIds = function () { return rows.filter(function (st) { return ticked[st.student_id]; }).map(function (st) { return st.student_id; }); };
+      var all = el('button', { text: 'Tick all ' + rows.length, class: 'small' });
+      var none = el('button', { text: 'Untick all', class: 'small ghost' });
+      all.addEventListener('click', function () { rows.forEach(function (st) { ticked[st.student_id] = true; }); paint(); });
+      none.addEventListener('click', function () { rows.forEach(function (st) { delete ticked[st.student_id]; }); paint(); });
+      listBox.appendChild(el('div', { class: 'row' }, all, none));
+      rows.forEach(function (st) {
+        var box = el('input', { type: 'checkbox', checked: !!ticked[st.student_id], 'aria-label': 'Move ' + st.name });
+        box.addEventListener('change', function () { if (box.checked) ticked[st.student_id] = true; else delete ticked[st.student_id]; paint(); });
+        listBox.appendChild(el('label', { class: 'row moverow' }, box, el('span', { class: 'name' }, st.name, idTag(st.student_id), batchTag(st.batch_id), sessionTag(st.session), st.active ? '' : tag('Inactive', 'bad'))));
+      });
+      var picked = chosenIds();
+      var movingText = picked.length + (picked.length === 1 ? ' student' : ' students');
+      var targets = coaches.filter(function (c) { return c.user_id !== fromPick.value; });
+      var toPick = select([['', 'Move to...']].concat(targets.map(function (c) { return [c.user_id, c.name + ' (' + (counts[c.user_id] || 0) + ' students)']; })), '', 'New coach');
+      var action = el('div');
+      function paintAction() {
+        clear(action);
+        if (!picked.length || !toPick.value) { action.appendChild(el('p', { class: 'muted small-line', text: picked.length ? 'Choose the new coach.' : 'Tick the students to move, then choose the new coach.' })); return; }
+        var fromName = fromPick.options[fromPick.selectedIndex].text.replace(/ \(\d+\)$/, '');
+        var toName = toPick.options[toPick.selectedIndex].text.replace(/ \(\d+ students\)$/, '');
+        action.appendChild(confirmButton('Move ' + movingText, function () { return 'Move ' + movingText + ' from ' + fromName + ' to ' + toName + '? Their attendance, lessons and reviews stay with them.'; }, 'Yes, move', function (done) {
+          guarded(api('api_moveStudents', token, picked, toPick.value), function (r) {
+            picked.forEach(function (id) { delete ticked[id]; });
+            banner('info', r.moved + (r.moved === 1 ? ' student' : ' students') + ' moved from ' + r.from.join(', ') + ' to ' + r.to + '. Their attendance, lessons and reviews moved with them.'); render();
+          }).then(done);
+        }));
+      }
+      toPick.addEventListener('change', paintAction);
+      toBox.appendChild(el('div', { class: 'row gap' }, toPick));
+      toBox.appendChild(action);
+      paintAction();
+    }
+    fromPick.addEventListener('change', function () { ticked = {}; paintBatches(); paint(); });
+    batchPick.addEventListener('change', paint);
+    return card;
   }
 
   function todayString() { return new Date(Date.now() + 19800000).toISOString().slice(0, 10); }      // India time (UTC+05:30)
