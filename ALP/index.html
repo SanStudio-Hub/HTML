@@ -205,6 +205,8 @@
   .bulk select { flex: 1 1 140px; }
   .sess-pick { justify-content: space-between; }
   .sess-pick select { flex: 1 1 60%; }
+  .confirm { margin-top: 6px; }
+  .warn-text { margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: #fbeceb; color: var(--bad); font-weight: 600; }
   h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
   .coach-row + h3.group, .card > h3.group:first-of-type { margin-top: 10px; }
   .clockcard .clock-row { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
@@ -408,6 +410,22 @@
     var node = el('select', { 'aria-label': label });
     options.forEach(function (opt) { node.appendChild(el('option', { value: opt[0], text: opt[1], selected: opt[0] === selected })); });
     return node;
+  }
+  // A permanent action takes two taps: the first shows what will be lost, the second does it.
+  function confirmButton(label, warning, yesLabel, action) {
+    var holder = el('div', { class: 'confirm' });
+    function ask() {
+      clear(holder);
+      var yes = el('button', { text: yesLabel, class: 'danger' });
+      var cancel = el('button', { text: 'Cancel', class: 'ghost' });
+      yes.addEventListener('click', function () { yes.disabled = true; cancel.disabled = true; action(function () { yes.disabled = false; cancel.disabled = false; }); });
+      cancel.addEventListener('click', idle);
+      holder.appendChild(el('p', { class: 'warn-text', text: warning }));
+      holder.appendChild(el('div', { class: 'row' }, yes, cancel));
+    }
+    function idle() { clear(holder); var start = el('button', { text: label, class: 'danger' }); start.addEventListener('click', ask); holder.appendChild(start); }
+    idle();
+    return holder;
   }
   function stat(kind, value, label) { return el('div', { class: 'stat ' + kind }, el('b', { text: String(value) }), el('span', { text: label })); }
   function shortDate(iso) { return iso ? iso.slice(8, 10) + ' ' + MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3) : ''; }
@@ -731,11 +749,17 @@
       move.addEventListener('click', function () {
         guarded(api('api_enrollStudent', token, data.student.student_id, target.value), function () { banner('info', 'Student moved. The previous course is marked completed.'); render(); });
       });
+      var removal = el('div', { class: 'card' }, el('h2', { text: 'Delete student' }),
+        el('p', { class: 'muted', text: 'Use this for students added by mistake or for tests. To keep the history of a student who left, untick Active above instead.' }),
+        confirmButton('Delete this student', 'Delete ' + data.student.name + ' (' + data.student.student_id + ') for good, with their attendance, lesson ticks and reviews? This cannot be undone.', 'Yes, delete permanently', function (done) {
+          guarded(api('api_deleteStudent', token, data.student.student_id), function (result) { nav.profile = ''; banner('info', result.deleted + ' was deleted.'); render(); }).then(done);
+        }));
       var enrol = el('div', { class: 'card' }, el('h2', { text: 'Enrolment' }),
         el('p', { class: 'muted', text: 'Move a student to the next course or month, or change their status. The earlier enrolment stays in the history.' }),
         el('div', { class: 'row' }, status, setStatus), el('div', { class: 'row gap' }, target, move));
       data.history.forEach(function (h) { enrol.appendChild(el('p', { class: 'muted', text: 'Batch ' + h.batch_id + ' - ' + (ENROLL_LABEL[h.status] || h.status) + ' - from ' + h.started_on + (h.ended_on ? ' to ' + h.ended_on : '') })); });
       holder.appendChild(enrol);
+      holder.appendChild(removal);
     });
   }
 
@@ -1063,9 +1087,20 @@
         toggle.addEventListener('click', function () {
           guarded(api('api_setPersonActive', token, person.user_id, !person.active), function () { banner('info', 'Updated.'); render(); });
         });
+        var removeCoach = '';
+        if (person.role === 'COACH') {
+          var owned = ov.students.filter(function (st) { return st.coach_id === person.user_id; }).length;
+          removeCoach = confirmButton('Delete', owned
+            ? 'Delete ' + person.name + ' for good, together with ' + owned + (owned === 1 ? ' student' : ' students') + ' and all their attendance, lesson ticks and reviews? This cannot be undone. To keep the students, move them to another coach first.'
+            : 'Delete ' + person.name + ' (@' + person.username + ') for good? This cannot be undone.', 'Yes, delete permanently', function (done) {
+            guarded(api('api_deletePerson', token, person.user_id, owned > 0), function (result) {
+              banner('info', result.deleted + ' was deleted' + (result.students ? ' with ' + result.students + (result.students === 1 ? ' student.' : ' students.') : '.')); render();
+            }).then(done);
+          });
+        }
         list.appendChild(el('div', { class: 'person' },
           el('span', { class: 'name' }, person.name, el('span', { class: 'badge', text: person.role === 'ADMIN' ? 'Admin' : 'Coach' }), person.temp_pin ? tag('First PIN not changed yet', 'warn') : '', el('span', { class: 'muted', text: '  @' + person.username + (person.active ? '' : '  (inactive)') })),
-          el('div', { class: 'row' }, phone, phoneButton), el('div', { class: 'row' }, resetInput, resetButton, toggle)));
+          el('div', { class: 'row' }, phone, phoneButton), el('div', { class: 'row' }, resetInput, resetButton, toggle), removeCoach));
       });
       body.appendChild(list);
     });
