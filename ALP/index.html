@@ -232,6 +232,10 @@
   .movelist { margin: 8px 0; }
   .moverow { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .moverow .name { font-weight: 600; flex: 1; }
+  .datebar3 { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .datebar3 input { width: 100%; }
+  .card.past { border-top: 4px solid var(--amber); }
+  .daynote { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--amber-soft); color: #8a4b12; font-weight: 600; }
   .confirm { margin-top: 6px; }
   .warn-text { margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: #fbeceb; color: var(--bad); font-weight: 600; }
   h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
@@ -525,7 +529,7 @@
   function shortIds(ids) { return ids.length > 6 ? ids.slice(0, 6).join(', ') + ' and ' + (ids.length - 6) + ' more' : ids.join(', '); }
 
   // ------------------------------------------------------------------ app shell: tabs, navigation
-  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null, stu: null };
+  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null, stu: null, day: '' };
 
   function signedOut() {
     saveToken(''); me = null;
@@ -543,7 +547,7 @@
     $('avatar').textContent = (me.name || '?').trim().charAt(0).toUpperCase();
     $('roleLine').textContent = isAdmin() ? 'Administrator' : 'Coach';
     if (me.mustChange) { showPinGate(); return; }
-    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null, stu: null };
+    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null, stu: null, day: '' };
     render();
   }
   // A PIN chosen by an administrator is temporary: nothing else works until the person has chosen their own.
@@ -563,7 +567,7 @@
   function tabList() {
     return isAdmin() ? [['home', 'Home'], ['attendance', 'Attendance'], ['students', 'Students'], ['classes', 'Classes'], ['people', 'People']] : [['today', 'Today'], ['students', 'Students']];
   }
-  function go(tabName) { nav.tab = tabName; nav.profile = ''; nav.session = ''; nav.compare = ''; if (tabName !== 'students') nav.importResult = null; render(); }
+  function go(tabName) { if (tabName !== nav.tab || tabName === 'today') nav.day = ''; nav.tab = tabName; nav.profile = ''; nav.session = ''; nav.compare = ''; if (tabName !== 'students') nav.importResult = null; render(); }
   function openProfile(studentId) { nav.profile = studentId; render(); }
   function render() {
     var root = $('content'); clear(root);
@@ -590,12 +594,42 @@
   function coachBatchOptions(batches) { return batches.map(function (b) { return [b.batch_id, b.batch_id + ' - ' + b.course + ' (' + MONTHS[Number(b.month.slice(5, 7)) - 1] + ' ' + b.month.slice(0, 4) + ')']; }); }
 
   // ------------------------------------------------------------------ coach: today
+  function longDate(iso) { return dateLabel(iso) + ' ' + iso.slice(0, 4); }
   function coachToday(body) {
     var note = loading(body);
-    guarded(api('api_coachToday', token), function (data) {
+    guarded(api('api_coachToday', token, nav.day || ''), function (data) {
       body.removeChild(note);
-      var card = el('div', { class: 'card' }, el('h2', { text: 'Today, ' + data.date }),
-        el('p', { class: data.students.length ? 'muted' : 'empty', text: data.students.length ? 'Tap a status for each student. You can change today\'s entry any time today.' : 'No students are on your list yet. Open "Students" to add them.' }));
+      var isToday = data.date === data.today;
+      var yesterday = new Date(Date.parse(data.today + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+      var dayName = isToday ? 'Today' : data.date === yesterday ? 'Yesterday' : 'Earlier day';
+      function setDay(value) { if (!value || value > data.today || value < data.min_date) return; nav.day = value === data.today ? '' : value; render(); }
+      var dateInput = el('input', { type: 'date', value: data.date, min: data.min_date, max: data.today, 'aria-label': 'Day to mark' });
+      var prev = el('button', { text: '<', class: 'small', 'aria-label': 'Previous day' });
+      var next = el('button', { text: '>', class: 'small', 'aria-label': 'Next day' });
+      prev.disabled = data.date <= data.min_date; next.disabled = data.date >= data.today;
+      prev.addEventListener('click', function () { setDay(new Date(Date.parse(data.date + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10)); });
+      next.addEventListener('click', function () { setDay(new Date(Date.parse(data.date + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10)); });
+      dateInput.addEventListener('change', function () { setDay(dateInput.value); });
+      var todayButton = el('button', { text: 'Today', class: 'small' + (isToday ? ' primary' : '') });
+      var yesterdayButton = el('button', { text: 'Yesterday', class: 'small' + (data.date === yesterday ? ' primary' : '') });
+      todayButton.addEventListener('click', function () { setDay(data.today); });
+      yesterdayButton.addEventListener('click', function () { setDay(yesterday); });
+      var summary = el('p', { class: 'meta' });
+      var bulk = el('div');
+      var card = el('div', { class: 'card' + (isToday ? '' : ' past') }, el('h2', { text: dayName + ', ' + longDate(data.date) }),
+        el('div', { class: 'datebar3' }, prev, dateInput, next), el('div', { class: 'exportbar' }, yesterdayButton, todayButton));
+      if (!isToday) card.appendChild(el('p', { class: 'daynote', text: 'You are marking ' + longDate(data.date) + ', not today. Each tap is saved for that day.' }));
+      card.appendChild(el('p', { class: data.students.length ? 'muted' : 'empty', text: data.students.length ? 'Tap a status for each student. You can change an entry any time, up to ' + (data.today > data.min_date ? Math.round((Date.parse(data.today) - Date.parse(data.min_date)) / 86400000) : 0) + ' days back.' : 'No students are on your list yet. Open "Students" to add them.' }));
+      card.appendChild(summary); card.appendChild(bulk);
+      function paintSummary() {
+        clear(summary); clear(bulk);
+        var n = { PRESENT: 0, ABSENT: 0, EXCUSED: 0, '': 0 };
+        data.students.forEach(function (st) { n[st.status || '']++; });
+        if (data.students.length) summary.appendChild(el('span', { class: 'meta' }, tag('Present ' + n.PRESENT, 'ok'), tag('Absent ' + n.ABSENT, 'bad'), tag('Excused ' + n.EXCUSED, 'warn'), tag('Not marked ' + n[''], 'info')));
+        if (n['']) bulk.appendChild(confirmButton('Mark the ' + n[''] + ' not marked as Present', function () { return 'Mark the ' + n[''] + (n[''] === 1 ? ' student' : ' students') + ' with no entry for ' + longDate(data.date) + ' as Present? Students already marked stay as they are, and you can change any entry afterwards.'; }, 'Yes, mark Present', function (done) {
+          guarded(api('api_markAllPresent', token, data.date), function (r) { banner('info', r.marked + (r.marked === 1 ? ' student' : ' students') + ' marked Present for ' + longDate(data.date) + '.'); render(); }).then(done);
+        }));
+      }
       var order = ['MORNING', 'EVENING', ''];
       var groups = order.map(function (key) { return data.students.filter(function (st) { return (st.session || '') === key; }); });
       var several = groups.filter(function (g) { return g.length; }).length > 1;
@@ -603,19 +637,21 @@
         if (!list.length) return;
         if (several) card.appendChild(el('h3', { class: 'group', text: order[gi] ? SESSION_LABEL[order[gi]] + ' class - ' + SESSION_TIME[order[gi]] : 'Session not set' }));
         list.forEach(function (student) {
-        var buttons = el('div', { class: 'seg' });
-        ['PRESENT', 'ABSENT', 'EXCUSED'].forEach(function (status) {
-          var button = el('button', { text: STATUS_LABEL[status], class: student.status === status ? 'on-' + status : '', 'aria-pressed': student.status === status ? 'true' : 'false' });
-          button.addEventListener('click', function () {
-            buttons.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
-            guarded(api('api_markAttendance', token, student.student_id, status), function () { banner('info', 'Saved: ' + student.name + ' - ' + STATUS_LABEL[status]); student.status = status; refreshButtons(buttons, status); })
-              .then(function () { buttons.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); });
+          var buttons = el('div', { class: 'seg' });
+          ['PRESENT', 'ABSENT', 'EXCUSED'].forEach(function (status) {
+            var button = el('button', { text: STATUS_LABEL[status], class: student.status === status ? 'on-' + status : '', 'aria-pressed': student.status === status ? 'true' : 'false' });
+            button.addEventListener('click', function () {
+              buttons.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+              guarded(api('api_markAttendance', token, student.student_id, status, data.date), function () {
+                banner('info', 'Saved: ' + student.name + ' - ' + STATUS_LABEL[status] + (isToday ? '' : ' (' + dateLabel(data.date) + ')')); student.status = status; refreshButtons(buttons, status); paintSummary();
+              }).then(function () { buttons.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); });
+            });
+            buttons.appendChild(button);
           });
-          buttons.appendChild(button);
-        });
-        card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name' }, student.name, idTag(student.student_id), batchTag(student.batch_id), several ? '' : sessionTag(student.session)), buttons));
+          card.appendChild(el('div', { class: 'coach-row' }, el('span', { class: 'name' }, student.name, idTag(student.student_id), batchTag(student.batch_id), several ? '' : sessionTag(student.session)), buttons));
         });
       });
+      paintSummary();
       body.appendChild(card);
     });
   }
