@@ -189,6 +189,8 @@
   .person .name { font-weight: 600; }
   input[type=search] { width: 100%; margin-bottom: 6px; }
   .loading { padding: 18px 4px; }
+  .ready { margin: 10px 0 4px; font-weight: 600; color: #1f5f43; }
+  .ready-line { margin: 0 0 2px; }
   @media (max-width: 700px) {
     .stu-top button { flex: none; }
     .resp td .stu-progress { flex: 1; justify-content: flex-end; }
@@ -443,11 +445,13 @@
     open.addEventListener('click', function () { openProfile(row.student_id); });
     var line = el('p', { class: 'muted meta' }, row.course ? tag(row.course, 'course') : tag('No course yet', 'warn'),
       row.status && row.status !== 'ENROLLED' ? tag(ENROLL_LABEL[row.status] || row.status, 'warn') : '',
-      'Attendance ' + pct(row.attendance_percent), showCoach && row.coach ? ' - ' + row.coach : '');
+      'Attendance ' + pct(row.attendance_percent) + (row.excused ? ' - Holidays ' + row.excused : ''), showCoach && row.coach ? ' - ' + row.coach : '');
+    var place = [row.location, row.profession].filter(Boolean).join(' - ');
     var card = el('div', { class: 'stu-card' },
       el('div', { class: 'stu-top' }, el('span', { class: 'name' }, row.name, idTag(row.student_id)), open),
       line,
-      el('div', { class: 'stu-progress' }, meter(row.progress_percent), el('span', { class: 'muted', text: row.total ? row.done + ' of ' + row.total + ' lessons - ' + pct(row.progress_percent) : 'No lessons yet' })),
+      place ? el('p', { class: 'muted meta', text: place }) : '',
+      el('div', { class: 'stu-progress' }, meter(row.progress_percent), el('span', { class: 'muted', text: (row.total ? row.done + ' of ' + row.total + ' lessons - ' + pct(row.progress_percent) : 'No lessons yet') + (row.videos_total ? ' - Videos ' + row.videos_done + '/' + row.videos_total : '') })),
       row.decision ? el('p', { class: 'meta' }, tag(DECISION_LABEL[row.decision], row.decision === 'NEEDS_SUPPORT' ? 'bad' : 'info')) : '',
       el('div', { class: 'row' }, callLink(row.mobile)));
     return card;
@@ -470,7 +474,7 @@
             render();
           }).then(function () { addButton.disabled = false; });
         });
-        add.appendChild(el('p', { class: 'muted', text: 'Choose the batch, then one student per line: name, mobile number. Student IDs are made automatically (like 2610ALPBZ001). Names may repeat. Up to 60 lines.' }));
+        add.appendChild(el('p', { class: 'muted', text: 'Choose the batch, then one student per line: name, mobile number. Student IDs are made automatically (like 2634ALPBZ001). Names may repeat. Up to 60 lines.' }));
         add.appendChild(el('div', { class: 'row' }, batch));
         add.appendChild(names);
         add.appendChild(el('p', null, addButton));
@@ -496,47 +500,57 @@
       // --- header
       var progressMeter = meter(data.progress.percent);
       var progressText = el('span', { class: 'muted', text: '' });
+      var videoText = el('p', { class: 'muted', text: '' });
       function paintProgress() {
         var done = data.lessons.filter(function (l) { return l.done; }).length;
         data.progress = { done: done, total: data.lessons.length, percent: data.lessons.length ? Math.round(100 * done / data.lessons.length) : null };
         setMeter(progressMeter, data.progress.percent);
         progressText.textContent = data.progress.total ? data.progress.done + ' of ' + data.progress.total + ' lessons - ' + pct(data.progress.percent) : 'No lessons yet';
+        var watched = data.videos.filter(function (v) { return v.done; }).length;
+        videoText.textContent = data.videos.length ? 'Review videos watched: ' + watched + ' of ' + data.videos.length : '';
       }
       paintProgress();
+      var place = [data.student.location, data.student.profession].filter(Boolean).join(' - ');
       var head = el('div', { class: 'card profile' },
         el('div', { class: 'stu-top' }, el('h2', { class: 'name', text: data.student.name }), idTag(data.student.student_id)),
         el('p', { class: 'meta' }, data.course ? tag(data.course.name, 'course') : tag('No course yet', 'warn'), data.batch_id ? tag('Batch ' + data.batch_id, '') : '',
           data.status ? tag(ENROLL_LABEL[data.status] || data.status, data.status === 'ENROLLED' ? 'ok' : 'warn') : '', data.student.active ? '' : tag('Inactive', 'bad')),
+        place ? el('p', { class: 'muted', text: place }) : '',
         el('p', { class: 'muted' }, 'Joined ' + (data.student.joined_on || '-') + ' - Coach: ' + (data.student.coach || '-')),
         el('div', { class: 'row' }, callLink(data.student.mobile), admin && data.student.coach_mobile ? el('a', { class: 'call', href: 'tel:' + data.student.coach_mobile, text: 'Call coach' }) : ''),
-        el('div', { class: 'stu-progress' }, progressMeter, progressText));
+        el('div', { class: 'stu-progress' }, progressMeter, progressText), videoText);
       body.appendChild(head);
-      // --- lessons
-      var lessons = el('div', { class: 'card' }, el('h2', { text: 'Lessons' }));
-      if (!data.course) lessons.appendChild(el('p', { class: 'muted', text: admin ? 'This student is not in a batch yet. Use "Enrolment" below.' : 'This student is not in a batch yet. Ask an admin to enrol them.' }));
-      data.lessons.forEach(function (lesson) {
-        var box = el('input', { type: 'checkbox', checked: lesson.done, 'aria-label': 'Lesson ' + lesson.position + ' done' });
-        var noteInput = el('input', { class: 'lesson-note', value: lesson.note, placeholder: lesson.done ? 'Note (optional)' : 'Tick the lesson to add a note', maxlength: '200', 'aria-label': 'Note for lesson ' + lesson.position });
-        noteInput.disabled = !lesson.done;
-        var when = el('span', { class: 'muted when', text: lesson.done && lesson.changed_on ? 'Done ' + shortDate(lesson.changed_on) : '' });
-        function save(done, onFail) {
-          box.disabled = true;
-          guarded(api('api_setLesson', token, data.student.student_id, lesson.lesson_id, done, noteInput.value), function () {
-            lesson.done = done; lesson.note = noteInput.value;
-            noteInput.disabled = !done; noteInput.placeholder = done ? 'Note (optional)' : 'Tick the lesson to add a note';
-            when.textContent = done ? 'Done today' : '';
-            paintProgress(); banner('info', done ? 'Lesson marked done.' : 'Lesson unticked.');
-          }).then(function (result) { if (result === undefined) { box.checked = lesson.done; if (onFail) onFail(); } box.disabled = false; });
-        }
-        box.addEventListener('change', function () { save(box.checked); });
-        noteInput.addEventListener('change', function () { if (lesson.done) save(true); });
-        lessons.appendChild(el('div', { class: 'lesson' }, el('label', { class: 'row lesson-title' }, box, el('span', { text: lesson.position + '. ' + lesson.title })), when, noteInput));
-      });
-      body.appendChild(lessons);
+      // --- lessons and review videos: the same tick-list for both
+      function checklist(title, items, noun, emptyText) {
+        var card = el('div', { class: 'card' }, el('h2', { text: title }));
+        if (emptyText) card.appendChild(el('p', { class: 'muted', text: emptyText }));
+        var doneWord = noun === 'video' ? 'Watched' : 'Done';
+        items.forEach(function (lesson) {
+          var box = el('input', { type: 'checkbox', checked: lesson.done, 'aria-label': noun + ' ' + lesson.position + ' done' });
+          var noteInput = el('input', { class: 'lesson-note', value: lesson.note, placeholder: lesson.done ? 'Note (optional)' : 'Tick it to add a note', maxlength: '200', 'aria-label': 'Note for ' + noun + ' ' + lesson.position });
+          noteInput.disabled = !lesson.done;
+          var when = el('span', { class: 'muted when', text: lesson.done && lesson.changed_on ? doneWord + ' ' + shortDate(lesson.changed_on) : '' });
+          function save(done) {
+            box.disabled = true;
+            guarded(api('api_setLesson', token, data.student.student_id, lesson.lesson_id, done, noteInput.value), function () {
+              lesson.done = done; lesson.note = noteInput.value;
+              noteInput.disabled = !done; noteInput.placeholder = done ? 'Note (optional)' : 'Tick it to add a note';
+              when.textContent = done ? doneWord + ' today' : '';
+              paintProgress(); banner('info', done ? (noun === 'video' ? 'Video marked as watched.' : 'Lesson marked done.') : 'Unticked.');
+            }).then(function (result) { if (result === undefined) box.checked = lesson.done; box.disabled = false; });
+          }
+          box.addEventListener('change', function () { save(box.checked); });
+          noteInput.addEventListener('change', function () { if (lesson.done) save(true); });
+          card.appendChild(el('div', { class: 'lesson' }, el('label', { class: 'row lesson-title' }, box, el('span', { text: lesson.position + '. ' + lesson.title })), when, noteInput));
+        });
+        return card;
+      }
+      body.appendChild(checklist('Lessons', data.lessons, 'lesson', data.course ? '' : (admin ? 'This student is not in a batch yet. Use "Enrolment" below.' : 'This student is not in a batch yet. Ask an admin to enrol them.')));
+      if (data.videos.length) body.appendChild(checklist('Review videos', data.videos, 'video', ''));
       // --- attendance
       var a = data.attendance;
       var att = el('div', { class: 'card' }, el('h2', { text: 'Attendance' }),
-        el('div', { class: 'stats' }, stat('PRESENT', a.present, 'Present'), stat('ABSENT', a.absent, 'Absent'), stat('EXCUSED', a.excused, 'Excused'), stat('NOT_RECORDED', pct(a.percent), 'Attendance')));
+        el('div', { class: 'stats' }, stat('PRESENT', a.present, 'Present'), stat('ABSENT', a.absent, 'Absent'), stat('EXCUSED', a.excused, 'Holidays (excused)'), stat('NOT_RECORDED', pct(a.percent), 'Attendance')));
       if (a.recent.length) {
         var chips = el('div', { class: 'chips' });
         a.recent.forEach(function (day) { chips.appendChild(el('span', { class: 'daychip ' + day.status, text: shortDate(day.date) + ' ' + STATUS_LABEL[day.status] })); });
@@ -566,14 +580,16 @@
     withOverview(holder, function (ov) {
       var student = ov.students.filter(function (s) { return s.student_id === data.student.student_id; })[0] || { coach_id: '' };
       var name = el('input', { value: data.student.name, 'aria-label': 'Student name' });
-      var mobile = el('input', { value: data.student.mobile, inputmode: 'tel', placeholder: 'Mobile number', 'aria-label': 'Mobile number' });
+      var mobile = el('input', { value: data.student.mobile, inputmode: 'tel', placeholder: data.student.mobile ? 'Mobile number' : 'Mobile number (not known yet)', 'aria-label': 'Mobile number' });
+      var location = el('input', { value: data.student.location, placeholder: 'Location', maxlength: '60', 'aria-label': 'Location' });
+      var profession = el('input', { value: data.student.profession, placeholder: 'Profession', maxlength: '80', 'aria-label': 'Profession' });
       var coach = select(coachOptions(ov), student.coach_id, 'Coach');
       var active = el('input', { type: 'checkbox', checked: data.student.active, 'aria-label': 'Active' });
       var save = el('button', { text: 'Save changes', class: 'primary' });
       save.addEventListener('click', function () {
-        guarded(api('api_updateStudent', token, data.student.student_id, name.value, coach.value, active.checked, mobile.value), function () { banner('info', 'Saved.'); render(); });
+        guarded(api('api_updateStudent', token, data.student.student_id, name.value, coach.value, active.checked, mobile.value, location.value, profession.value), function () { banner('info', 'Saved.'); render(); });
       });
-      holder.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Edit student' }), el('div', { class: 'row' }, name, mobile, coach, el('label', { class: 'row' }, active, 'Active'), save)));
+      holder.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Edit student' }), el('div', { class: 'row' }, name, mobile, location, profession, coach, el('label', { class: 'row' }, active, 'Active'), save)));
       var status = select(Object.keys(ENROLL_LABEL).map(function (k) { return [k, ENROLL_LABEL[k]]; }), data.status || 'ENROLLED', 'Enrolment status');
       var setStatus = el('button', { text: 'Update status' });
       setStatus.addEventListener('click', function () {
@@ -610,27 +626,56 @@
             render();
           }).then(function () { addButton.disabled = false; });
         });
-        add.appendChild(el('p', { class: 'muted', text: 'Choose the batch and the coach, then one student per line: name, mobile number. IDs are made automatically (like 2610ALPBZ001); to use your own, add it at the end of the line (it must contain a letter). Names may repeat.' }));
+        add.appendChild(el('p', { class: 'muted', text: 'Choose the batch and the coach, then one student per line: name, mobile number. IDs are made automatically (like 2634ALPBZ001); to use your own, add it at the end of the line (it must contain a letter). Names may repeat.' }));
         add.appendChild(el('div', { class: 'row' }, batch, coach));
         add.appendChild(lines);
         add.appendChild(el('p', null, addButton));
       }
       body.appendChild(add);
+      var importCard = el('div', { class: 'card' }, el('h2', { text: 'Import existing students from your sheet' }));
+      if (!batches.length) importCard.appendChild(el('p', { class: 'muted', text: 'Create the course and the batch first (Classes tab), and add the coaches (People tab).' }));
+      else {
+        var importBatch = select(batches, '', 'Batch');
+        var paste = el('textarea', { rows: 6, placeholder: 'Paste the rows copied from your Google Sheet here, with the heading row', 'aria-label': 'Rows copied from the sheet', spellcheck: 'false' });
+        var outcome = el('div');
+        var check = el('button', { text: 'Check', class: 'primary' });
+        var importNow = el('button', { text: 'Import now', class: 'primary' });
+        importNow.disabled = true;
+        function reset() { importNow.disabled = true; clear(outcome); }
+        paste.addEventListener('input', reset); importBatch.addEventListener('change', reset);
+        check.addEventListener('click', function () {
+          check.disabled = true;
+          guarded(api('api_importStudents', token, importBatch.value, paste.value, false), function (r) {
+            clear(outcome);
+            outcome.appendChild(el('p', { class: 'ready', text: r.students + ' students are ready to import into batch ' + r.batch_id + ':' }));
+            r.coaches.forEach(function (c) { outcome.appendChild(el('p', { class: 'muted ready-line', text: c.coach + ' - ' + c.students })); });
+            importNow.disabled = false;
+          }).then(function () { check.disabled = false; });
+        });
+        importNow.addEventListener('click', function () {
+          importNow.disabled = true;
+          guarded(api('api_importStudents', token, importBatch.value, paste.value, true), function (r) { banner('info', r.students + ' students imported with their IDs.'); render(); }).then(function () { importNow.disabled = false; });
+        });
+        importCard.appendChild(el('p', { class: 'muted', text: 'In your Google Sheet select the student rows (Sno, COACH, REG NOID, Name, Location, profession ...), copy them together with the heading row, and paste them below. Coaches are matched by name, so add the coaches first. Student IDs are kept exactly as written; mobile numbers are not needed. Press Check first: nothing is saved until you press Import now.' }));
+        importCard.appendChild(el('div', { class: 'row' }, importBatch)); importCard.appendChild(paste); importCard.appendChild(outcome);
+        importCard.appendChild(el('div', { class: 'row gap' }, check, importNow));
+      }
+      body.appendChild(importCard);
       var list = el('div', { class: 'card' }, el('h2', { text: 'All students (' + ov.students.length + ')' }));
-      var search = el('input', { type: 'search', placeholder: 'Search name, ID or mobile', 'aria-label': 'Search students' });
+      var search = el('input', { type: 'search', placeholder: 'Search name, ID, mobile, location', 'aria-label': 'Search students' });
       var rows = el('div');
       var coachName = {};
       ov.people.forEach(function (p) { coachName[p.user_id] = p.name; });
       function paint() {
         clear(rows);
         var q = search.value.trim().toLowerCase();
-        var shown = ov.students.filter(function (s) { return !q || (s.name + ' ' + s.student_id + ' ' + s.mobile).toLowerCase().indexOf(q) >= 0; });
+        var shown = ov.students.filter(function (s) { return !q || (s.name + ' ' + s.student_id + ' ' + s.mobile + ' ' + s.location + ' ' + s.profession).toLowerCase().indexOf(q) >= 0; });
         shown.forEach(function (s) {
           var open = el('button', { text: 'Open', class: 'small' });
           open.addEventListener('click', function () { openProfile(s.student_id); });
           rows.appendChild(el('div', { class: 'student' },
             el('span', { class: 'name' }, s.name, idTag(s.student_id), s.active ? '' : tag('Inactive', 'bad'),
-              el('span', { class: 'muted sub', text: (coachName[s.coach_id] || '') + (s.batch_id ? ' - batch ' + s.batch_id : ' - no batch') + (s.mobile ? ' - ' + s.mobile : '') })), open));
+              el('span', { class: 'muted sub', text: (coachName[s.coach_id] || '') + (s.batch_id ? ' - batch ' + s.batch_id : ' - no batch') + (s.mobile ? ' - ' + s.mobile : '') + (s.location ? ' - ' + s.location : '') })), open));
         });
         if (!shown.length) rows.appendChild(el('p', { class: 'empty', text: ov.students.length ? 'Nobody matches your search.' : 'No students yet.' }));
       }
@@ -660,7 +705,7 @@
       }
       holder.appendChild(compare);
       // --- batches
-      var batchCard = el('div', { class: 'card' }, el('h2', { text: 'Batches (one per course and month)' }));
+      var batchCard = el('div', { class: 'card' }, el('h2', { text: 'Batches (one per intake of a course)' }));
       var activeCourses = ov.courses.filter(function (c) { return c.active; });
       if (!activeCourses.length) batchCard.appendChild(el('p', { class: 'muted', text: 'Add a course first.' }));
       else {
@@ -669,11 +714,13 @@
         var month = select(MONTHS.map(function (m, i) { return [('0' + (i + 1)).slice(-2), m]; }), ('0' + (now.getUTCMonth() + 1)).slice(-2), 'Month');
         var years = []; for (var y = now.getUTCFullYear() - 1; y <= now.getUTCFullYear() + 2; y++) years.push([String(y), String(y)]);
         var year = select(years, String(now.getUTCFullYear()), 'Year');
+        var number = el('input', { placeholder: 'Batch number (e.g. 34)', inputmode: 'numeric', maxlength: '3', 'aria-label': 'Batch number' });
         var create = el('button', { text: 'Create batch', class: 'primary' });
         create.addEventListener('click', function () {
-          guarded(api('api_addBatch', token, course.value, year.value + '-' + month.value), function (result) { banner('info', 'Batch ' + result.batch_id + ' created.'); render(); });
+          guarded(api('api_addBatch', token, course.value, year.value + '-' + month.value, number.value), function (result) { banner('info', 'Batch ' + result.batch_id + ' created. Its students will get IDs like ' + result.batch_id.slice(0, -2) + 'ALP' + result.batch_id.slice(-2) + '001.'); render(); });
         });
-        batchCard.appendChild(el('div', { class: 'row' }, course, month, year, create));
+        batchCard.appendChild(el('p', { class: 'muted', text: 'The batch number goes into every student ID: year 2026, batch 34 and course BZ give IDs like 2634ALPBZ001. The month is only the start month.' }));
+        batchCard.appendChild(el('div', { class: 'row' }, course, month, year, number, create));
       }
       ov.batches.forEach(function (b) {
         var toggle = el('button', { text: b.active ? 'Close' : 'Reopen', class: 'small' + (b.active ? ' danger' : '') });
@@ -686,22 +733,25 @@
       var code = el('input', { placeholder: 'Code (e.g. BZ)', maxlength: '6', autocapitalize: 'characters', 'aria-label': 'Course code' });
       var title = el('input', { placeholder: 'Course name (e.g. Basic Astrology)', 'aria-label': 'Course name' });
       var lessons = el('textarea', { rows: 5, placeholder: 'Introduction\nThe zodiac signs\nThe houses', 'aria-label': 'Lessons, one per line', spellcheck: 'false' });
+      var videos = el('textarea', { rows: 3, placeholder: 'Review videos, one per line (optional)', 'aria-label': 'Review videos, one per line', spellcheck: 'false' });
       var add = el('button', { text: 'Add course', class: 'primary' });
       add.addEventListener('click', function () {
         add.disabled = true;
-        guarded(api('api_addCourse', token, code.value, title.value, lessons.value), function (result) { banner('info', 'Course added with ' + result.lessons + ' lessons.'); render(); }).then(function () { add.disabled = false; });
+        guarded(api('api_addCourse', token, code.value, title.value, lessons.value, videos.value), function (result) { banner('info', 'Course added with ' + result.lessons + ' lessons and ' + result.videos + ' review videos.'); render(); }).then(function () { add.disabled = false; });
       });
-      courseCard.appendChild(el('p', { class: 'muted', text: 'The short code is part of every student ID (for example BZ in 2610ALPBZ001). List the lessons in order, one per line.' }));
-      courseCard.appendChild(el('div', { class: 'row' }, code, title)); courseCard.appendChild(lessons); courseCard.appendChild(el('p', null, add));
+      courseCard.appendChild(el('p', { class: 'muted', text: 'The short code is part of every student ID (for example BZ in 2634ALPBZ001). List the lessons in order, one per line.' }));
+      courseCard.appendChild(el('div', { class: 'row' }, code, title)); courseCard.appendChild(lessons); courseCard.appendChild(videos); courseCard.appendChild(el('p', null, add));
       ov.courses.forEach(function (c) {
-        var more = el('textarea', { rows: 3, placeholder: 'More lessons, one per line', 'aria-label': 'More lessons for ' + c.name, spellcheck: 'false' });
-        var addMore = el('button', { text: 'Add lessons', class: 'small' });
-        addMore.addEventListener('click', function () { guarded(api('api_addLessons', token, c.course_id, more.value), function (result) { banner('info', 'The course now has ' + result.lessons + ' lessons.'); render(); }); });
+        var more = el('textarea', { rows: 3, placeholder: 'More lessons or review videos, one per line', 'aria-label': 'More lessons or videos for ' + c.name, spellcheck: 'false' });
+        var addMore = el('button', { text: 'Add as lessons', class: 'small' });
+        addMore.addEventListener('click', function () { guarded(api('api_addLessons', token, c.course_id, more.value, 'LESSON'), function (result) { banner('info', 'The course now has ' + result.lessons + ' lessons.'); render(); }); });
+        var addVideos = el('button', { text: 'Add as review videos', class: 'small' });
+        addVideos.addEventListener('click', function () { guarded(api('api_addLessons', token, c.course_id, more.value, 'VIDEO'), function (result) { banner('info', 'The course now has ' + result.lessons + ' review videos.'); render(); }); });
         var toggle = el('button', { text: c.active ? 'Deactivate' : 'Activate', class: 'small' + (c.active ? ' danger' : '') });
         toggle.addEventListener('click', function () { guarded(api('api_setCourseActive', token, c.course_id, !c.active), function () { banner('info', 'Updated.'); render(); }); });
         courseCard.appendChild(el('div', { class: 'course' },
-          el('div', { class: 'student' }, el('span', { class: 'name' }, c.name, idTag(c.code), c.active ? '' : tag('Inactive', 'bad'), el('span', { class: 'muted sub', text: c.lessons + ' lessons' })), toggle),
-          more, el('p', null, addMore)));
+          el('div', { class: 'student' }, el('span', { class: 'name' }, c.name, idTag(c.code), c.active ? '' : tag('Inactive', 'bad'), el('span', { class: 'muted sub', text: c.lessons + ' lessons' + (c.videos ? ', ' + c.videos + ' review videos' : '') })), toggle),
+          more, el('div', { class: 'row gap' }, addMore, addVideos)));
       });
       holder.appendChild(courseCard);
       body.appendChild(holder);
@@ -713,7 +763,7 @@
       stat('NOT_RECORDED', report.batch.lessons, 'Lessons in course')));
     if (!report.rows.length) { out.appendChild(el('p', { class: 'empty', text: 'No active students in this batch yet.' })); return; }
     var table = el('table', { class: 'resp' });
-    table.appendChild(el('tr', { class: 'head' }, el('th', { text: '#' }), el('th', { text: 'Student' }), el('th', { text: 'Coach' }), el('th', { text: 'Progress' }), el('th', { text: 'Attendance' }), el('th', { text: 'Attention' }), el('th', { text: '' })));
+    table.appendChild(el('tr', { class: 'head' }, el('th', { text: '#' }), el('th', { text: 'Student' }), el('th', { text: 'Coach' }), el('th', { text: 'Progress' }), el('th', { text: 'Attendance' }), el('th', { text: 'Holidays' }), el('th', { text: 'Videos' }), el('th', { text: 'Attention' }), el('th', { text: '' })));
     report.rows.forEach(function (row, i) {
       var open = el('button', { text: 'Open', class: 'small' });
       open.addEventListener('click', function () { openProfile(row.student_id); });
@@ -726,6 +776,8 @@
         el('td', { text: row.coach, 'data-label': 'Coach' }),
         el('td', { 'data-label': 'Progress' }, el('span', { class: 'stu-progress' }, meter(row.progress_percent), el('span', { text: pct(row.progress_percent) }))),
         el('td', { text: pct(row.attendance_percent), 'data-label': 'Attendance' }),
+        el('td', { text: String(row.excused), 'data-label': 'Holidays' }),
+        el('td', { text: row.videos_total ? row.videos_done + '/' + row.videos_total : '-', 'data-label': 'Videos' }),
         el('td', { 'data-label': 'Attention' }, flags),
         el('td', { 'data-label': '' }, open)));
     });
