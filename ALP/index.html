@@ -91,7 +91,7 @@
   .empty { text-align: center; padding: 26px 8px; color: var(--muted); }
   #printView { display: none; }
   #printView h1 { margin-bottom: 4px; }
-  #printView table { font-size: 11pt; margin-top: 10px; }
+  #printView table { font-size: 10pt; margin-top: 10px; }
   #printView th, #printView td { border: 1px solid #999; padding: 4px 6px; }
   @media print {
     body { background: #fff; }
@@ -99,7 +99,7 @@
     main { margin: 0; padding: 0; }
     main > *:not(#printView) { display: none !important; }
     #printView { display: block; }
-    @page { margin: 14mm; }
+    @page { margin: 12mm; size: A4 landscape; }
   }
   .credit { text-align: center; color: var(--muted); font-size: .85rem; margin: 22px 0 4px; }
   .credit a { color: #8a4b12; font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--amber); }
@@ -210,10 +210,11 @@
   .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 8px; }
   .filters select, .filters input { width: 100%; }
   .filters select:first-child { grid-column: 1 / -1; }
+  .filters.stu select:nth-child(2) { grid-column: 1 / -1; }
   .att .seg button { min-height: 44px; }
   .att .coach-row { padding: 12px 0; gap: 8px; }
   .filters input[type=search] { grid-column: 1 / -1; margin: 0; }
-  @media (min-width: 701px) { .filters { grid-template-columns: repeat(4, minmax(0, 1fr)); } .filters input[type=search], .filters select:first-child { grid-column: auto; } }
+  @media (min-width: 701px) { .filters { grid-template-columns: repeat(4, minmax(0, 1fr)); } .filters input[type=search], .filters select:first-child, .filters.stu select:nth-child(2) { grid-column: auto; } }
   .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
   .fchip { min-height: 40px; padding: 6px 12px; border-radius: 999px; font-size: .88rem; }
   .fchip b { margin-left: 6px; font-weight: 700; }
@@ -223,6 +224,11 @@
   .fchip.on.EXCUSED { background: var(--warn); border-color: var(--warn); }
   .row-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .row-between p { margin: 4px 0; }
+  .row-between button { white-space: nowrap; }
+  .exportbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 6px 0 8px; }
+  @media (max-width: 700px) { .student.compact > button { flex: 0 0 auto; } .student.compact .name { flex: 1 1 0; min-width: 0; } }
+  .picker { display: grid; gap: 6px; flex: 1 1 100%; }
+  .picker select, .picker input { width: 100%; }
   .confirm { margin-top: 6px; }
   .warn-text { margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: #fbeceb; color: var(--bad); font-weight: 600; }
   h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
@@ -429,6 +435,72 @@
     options.forEach(function (opt) { node.appendChild(el('option', { value: opt[0], text: opt[1], selected: opt[0] === selected })); });
     return node;
   }
+  // Professions are chosen from a group and then a type; anything not listed is typed. It is saved as "Group - Type" (for example "Healthcare & Medicine - Siddha doctor").
+  var PROFESSIONS = [
+    ["Healthcare & Medicine", ["General physician", "Surgeon", "Dentist", "Siddha doctor", "Ayurveda doctor", "Homeopathy doctor", "Unani doctor", "Nurse", "Pharmacist", "Physiotherapist", "Medical lab technician"]], ["Engineering & Technology", ["IT / software", "Civil engineering", "Mechanical engineering", "Electrical engineering", "Electronics engineering", "Automobile engineering", "Chemical engineering", "Aerospace engineering", "AI / data science", "Cybersecurity"]], ["Education & Research", ["School teacher", "College lecturer", "Professor", "Tutor", "Researcher", "Special educator", "Education administrator"]], ["Business & Entrepreneurship", ["Business owner", "Startup founder", "Trader", "Retailer", "Manufacturer", "Self-employed professional"]], ["Finance & Accounting", ["Accountant", "Auditor", "Banker", "Financial adviser", "Insurance professional", "Tax consultant"]], ["Law & Legal Services", ["Advocate / lawyer", "Judge", "Legal adviser", "Legal assistant", "Notary"]], ["Government & Public Service", ["Central government employee", "State government employee", "Local body employee", "Civil services", "Public sector employee"]], ["Defence, Police & Security", ["Army", "Navy", "Air Force", "Police", "Fire service", "Security officer"]], ["Agriculture & Animal Care", ["Farmer", "Horticulturist", "Agricultural officer", "Dairy professional", "Veterinarian", "Fisheries professional"]], ["Construction & Real Estate", ["Architect", "Civil contractor", "Site engineer", "Builder", "Property consultant", "Interior designer"]], ["Media, Arts & Entertainment", ["Journalist", "Photographer", "Video editor", "Actor", "Musician", "Designer", "Content creator"]], ["Sales, Marketing & Customer Service", ["Sales executive", "Marketing professional", "Digital marketer", "Public relations", "Customer support"]], ["Hospitality, Food & Travel", ["Hotel staff", "Chef", "Restaurant owner", "Travel agent", "Tour guide", "Event planner"]], ["Transport & Logistics", ["Driver", "Pilot", "Railway employee", "Delivery professional", "Logistics coordinator", "Shipping professional"]], ["Skilled Trades & Technical Services", ["Electrician", "Plumber", "Carpenter", "Mechanic", "Welder", "Appliance technician"]], ["Social Services & Non-profits", ["Social worker", "NGO employee", "Counsellor", "Community worker", "Charity organiser"]], ["Other Professional Services", ["Consultant", "Astrologer", "Coach", "Trainer", "Beautician", "Fitness instructor"]]];
+  var OTHER_GROUP = 'Other';
+  var NOT_LISTED = '__typed__';
+  function professionGroup(text) {                               // the group of a saved profession; older free text counts as Other
+    var clean = String(text || '').trim();
+    if (!clean) return '';
+    var head = clean.indexOf(' - ') >= 0 ? clean.slice(0, clean.indexOf(' - ')) : clean;
+    var found = PROFESSIONS.filter(function (g) { return g[0].toLowerCase() === head.toLowerCase(); })[0];
+    return found ? found[0] : OTHER_GROUP;
+  }
+  // Two linked lists (group, type) and a box for work that is not listed. value() gives the text to save; if nothing was touched it is the original text, unchanged.
+  function professionPicker(initial) {
+    var original = String(initial || '').trim();
+    var touched = false;
+    var group = professionGroup(original), kind = '', typedText = '';
+    if (original) {
+      var cut = original.indexOf(' - ');
+      var tail = cut >= 0 ? original.slice(cut + 3) : '';
+      var known = PROFESSIONS.filter(function (g) { return g[0] === group; })[0];
+      if (group === OTHER_GROUP && !/^other( - |$)/i.test(original)) typedText = original;
+      else if (known && known[1].indexOf(tail) >= 0) kind = tail;
+      else if (tail) { kind = NOT_LISTED; typedText = tail; }
+      if (group === OTHER_GROUP && /^other - /i.test(original)) typedText = tail;
+    }
+    var groupSelect = select([['', 'Not given']].concat(PROFESSIONS.map(function (g) { return [g[0], g[0]]; }), [[OTHER_GROUP, 'Other - not listed']]), group, 'Profession group');
+    var kindSelect = el('select', { 'aria-label': 'Type of work' });
+    var typed = el('input', { value: typedText, placeholder: 'Type the work', maxlength: '40', 'aria-label': 'Type the work' });
+    function paintKind() {
+      clear(kindSelect);
+      var known2 = PROFESSIONS.filter(function (g) { return g[0] === groupSelect.value; })[0];
+      var options = known2 ? [['', 'Choose the type of work']].concat(known2[1].map(function (n) { return [n, n]; }), [[NOT_LISTED, 'Other in this group - type it']]) : [];
+      options.forEach(function (opt) { kindSelect.appendChild(el('option', { value: opt[0], text: opt[1], selected: opt[0] === kind })); });
+      kindSelect.classList.toggle('hidden', !known2);
+      typed.classList.toggle('hidden', !(groupSelect.value === OTHER_GROUP || (known2 && kindSelect.value === NOT_LISTED)));
+    }
+    groupSelect.addEventListener('change', function () { touched = true; kind = ''; paintKind(); });
+    kindSelect.addEventListener('change', function () { touched = true; kind = kindSelect.value; paintKind(); });
+    typed.addEventListener('input', function () { touched = true; });
+    paintKind();
+    return {
+      node: el('div', { class: 'picker' }, el('span', { class: 'muted', text: 'Profession' }), groupSelect, kindSelect, typed),
+      value: function () {
+        if (!touched) return original;
+        var g = groupSelect.value;
+        if (!g) return '';
+        var detail = g === OTHER_GROUP || kindSelect.value === NOT_LISTED ? typed.value.trim() : kindSelect.value;
+        return g + (detail ? ' - ' + detail : '');
+      }
+    };
+  }
+  // The place is chosen from the places already used (so "Chennai" is never typed three ways); a new place is typed.
+  function placePicker(initial, places) {
+    var original = String(initial || '').trim();
+    var list = (places || []).slice();
+    if (original && !list.some(function (p) { return p.toLowerCase() === original.toLowerCase(); })) list.push(original);
+    list.sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+    var current = list.filter(function (p) { return p.toLowerCase() === original.toLowerCase(); })[0] || '';
+    var pick = select([['', 'Not given']].concat(list.map(function (p) { return [p, p]; }), [[NOT_LISTED, 'A new place - type it']]), current, 'Place');
+    var typed = el('input', { placeholder: 'Type the place', maxlength: '60', 'aria-label': 'Type the place' });
+    function paint() { typed.classList.toggle('hidden', pick.value !== NOT_LISTED); }
+    pick.addEventListener('change', paint);
+    paint();
+    return { node: el('div', { class: 'picker' }, el('span', { class: 'muted', text: 'Place' }), pick, typed), value: function () { return pick.value === NOT_LISTED ? typed.value.trim() : pick.value; } };
+  }
   // A permanent action takes two taps: the first shows what will be lost, the second does it.
   function confirmButton(label, warning, yesLabel, action) {
     var holder = el('div', { class: 'confirm' });
@@ -450,7 +522,7 @@
   function shortIds(ids) { return ids.length > 6 ? ids.slice(0, 6).join(', ') + ' and ' + (ids.length - 6) + ' more' : ids.join(', '); }
 
   // ------------------------------------------------------------------ app shell: tabs, navigation
-  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null };
+  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null, stu: null };
 
   function signedOut() {
     saveToken(''); me = null;
@@ -468,7 +540,7 @@
     $('avatar').textContent = (me.name || '?').trim().charAt(0).toUpperCase();
     $('roleLine').textContent = isAdmin() ? 'Administrator' : 'Coach';
     if (me.mustChange) { showPinGate(); return; }
-    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null };
+    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null, stu: null };
     render();
   }
   // A PIN chosen by an administrator is temporary: nothing else works until the person has chosen their own.
@@ -738,6 +810,16 @@
       });
       body.appendChild(reviews);
       if (admin) adminProfileTools(body, data);
+      else {
+        var placeBox = placePicker(data.student.location, data.places);
+        var workBox = professionPicker(data.student.profession);
+        var saveDetails = el('button', { text: 'Save place and profession', class: 'primary' });
+        saveDetails.addEventListener('click', function () {
+          saveDetails.disabled = true;
+          guarded(api('api_setStudentDetails', token, data.student.student_id, placeBox.value(), workBox.value()), function () { banner('info', 'Saved.'); render(); }).then(function () { saveDetails.disabled = false; });
+        });
+        body.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Place and profession' }), el('div', { class: 'stack' }, placeBox.node, workBox.node), el('p', null, saveDetails)));
+      }
     });
   }
   function adminProfileTools(body, data) {
@@ -747,16 +829,16 @@
       var student = ov.students.filter(function (s) { return s.student_id === data.student.student_id; })[0] || { coach_id: '' };
       var name = el('input', { value: data.student.name, 'aria-label': 'Student name' });
       var mobile = el('input', { value: data.student.mobile, inputmode: 'tel', placeholder: data.student.mobile ? 'Mobile number' : 'Mobile number (not known yet)', 'aria-label': 'Mobile number' });
-      var location = el('input', { value: data.student.location, placeholder: 'Location', maxlength: '60', 'aria-label': 'Location' });
-      var profession = el('input', { value: data.student.profession, placeholder: 'Profession', maxlength: '80', 'aria-label': 'Profession' });
+      var placeEdit = placePicker(data.student.location, data.places);
+      var workEdit = professionPicker(data.student.profession);
       var coach = select(coachOptions(ov), student.coach_id, 'Coach');
       var sessionEdit = select([['', 'Session not set']].concat(SESSION_CHOICES), data.student.session || '', 'Session');
       var active = el('input', { type: 'checkbox', checked: data.student.active, 'aria-label': 'Active' });
       var save = el('button', { text: 'Save changes', class: 'primary' });
       save.addEventListener('click', function () {
-        guarded(api('api_updateStudent', token, data.student.student_id, name.value, coach.value, active.checked, mobile.value, location.value, profession.value, sessionEdit.value), function () { banner('info', 'Saved.'); render(); });
+        guarded(api('api_updateStudent', token, data.student.student_id, name.value, coach.value, active.checked, mobile.value, placeEdit.value(), workEdit.value(), sessionEdit.value), function () { banner('info', 'Saved.'); render(); });
       });
-      holder.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Edit student' }), el('div', { class: 'row' }, name, mobile, location, profession, coach, sessionEdit, el('label', { class: 'row' }, active, 'Active'), save)));
+      holder.appendChild(el('div', { class: 'card' }, el('h2', { text: 'Edit student' }), el('div', { class: 'row' }, name, mobile, placeEdit.node, workEdit.node, coach, sessionEdit, el('label', { class: 'row' }, active, 'Active'), save)));
       var status = select(Object.keys(ENROLL_LABEL).map(function (k) { return [k, ENROLL_LABEL[k]]; }), data.status || 'ENROLLED', 'Enrolment status');
       var setStatus = el('button', { text: 'Update status' });
       setStatus.addEventListener('click', function () {
@@ -821,7 +903,6 @@
         add.appendChild(lines);
         add.appendChild(el('p', null, addButton));
       }
-      body.appendChild(add);
       var importCard = el('div', { class: 'card' }, el('h2', { text: 'Import existing students from your sheet' }));
       if (!batches.length) importCard.appendChild(el('p', { class: 'muted', text: 'Create the course and the batch first (Classes tab), and add the coaches (People tab).' }));
       else {
@@ -859,30 +940,105 @@
         importCard.appendChild(el('div', { class: 'row' }, importBatch, importSession)); importCard.appendChild(paste); importCard.appendChild(outcome);
         importCard.appendChild(el('div', { class: 'row gap' }, check, importNow));
       }
-      body.appendChild(importCard);
-      var list = el('div', { class: 'card' }, el('h2', { text: 'All students (' + ov.students.length + ')' }));
-      var search = el('input', { type: 'search', placeholder: 'Search name, ID, mobile, location', 'aria-label': 'Search students' });
-      var sessionFilter = select([['', 'All sessions'], ['MORNING', 'Morning'], ['EVENING', 'Evening'], ['NONE', 'Session not set']], nav.session || '', 'Show only one session');
-      var rows = el('div');
+      var list = el('div', { class: 'card' }, el('h2', { text: 'Students' }));
+      var f = nav.stu = nav.stu || { loc: '', prof: '', coach: '', batch: '', session: '', status: 'ACTIVE', q: '', shown: 40 };
+      if (nav.session) { f.session = nav.session; nav.session = ''; f.shown = 40; }            // arriving from "View students" on the Home tab
       var coachName = {};
       ov.people.forEach(function (p) { coachName[p.user_id] = p.name; });
-      function paint() {
-        clear(rows);
-        var q = search.value.trim().toLowerCase();
-        var wanted = sessionFilter.value;
-        var shown = ov.students.filter(function (s) { return (!wanted || (wanted === 'NONE' ? !s.session : s.session === wanted)) && (!q || (s.name + ' ' + s.student_id + ' ' + s.mobile + ' ' + s.location + ' ' + s.profession).toLowerCase().indexOf(q) >= 0); });
-        shown.forEach(function (s) {
-          var open = el('button', { text: 'Open', class: 'small' });
-          open.addEventListener('click', function () { openProfile(s.student_id); });
-          rows.appendChild(el('div', { class: 'student' },
-            el('span', { class: 'name' }, s.name, idTag(s.student_id), sessionTag(s.session), s.active ? '' : tag('Inactive', 'bad'),
-              el('span', { class: 'muted sub', text: (coachName[s.coach_id] || '') + (s.batch_id ? ' - batch ' + s.batch_id : ' - no batch') + (s.mobile ? ' - ' + s.mobile : '') + (s.location ? ' - ' + s.location : '') })), open));
-        });
-        if (!shown.length) rows.appendChild(el('p', { class: 'empty', text: ov.students.length ? 'Nobody matches your search.' : 'No students yet.' }));
+      // places are typed by hand, so "Chennai", "chennai" and "Chennai " count as one place
+      var placeKey = function (text) { return String(text || '').trim().toLowerCase().replace(/\s+/g, ' '); };
+      var places = {}, perCoach = {}, perBatch = {}, perGroup = {}, noPlace = 0, noBatch = 0, noWork = 0;
+      ov.students.forEach(function (st) {
+        var k = placeKey(st.location);
+        if (k) { var p = places[k] = places[k] || { count: 0, spellings: {} }; p.count++; var t = st.location.trim(); p.spellings[t] = (p.spellings[t] || 0) + 1; } else noPlace++;
+        perCoach[st.coach_id] = (perCoach[st.coach_id] || 0) + 1;
+        var g = professionGroup(st.profession);
+        if (g) perGroup[g] = (perGroup[g] || 0) + 1; else noWork++;
+        if (st.batch_id) perBatch[st.batch_id] = (perBatch[st.batch_id] || 0) + 1; else noBatch++;
+      });
+      var placeLabel = function (k) { var sp = places[k].spellings; return Object.keys(sp).sort(function (a, b) { return sp[b] - sp[a]; })[0]; };
+      if (f.loc && f.loc !== 'NONE' && !places[f.loc]) f.loc = '';
+      if (f.coach && !perCoach[f.coach]) f.coach = '';
+      if (f.prof && f.prof !== 'NONE' && !perGroup[f.prof]) f.prof = '';
+      if (f.batch && f.batch !== 'NONE' && !perBatch[f.batch]) f.batch = '';
+      var placeKeys = Object.keys(places).sort(function (a, b) { return placeLabel(a).toLowerCase() < placeLabel(b).toLowerCase() ? -1 : 1; });
+      var locPick = select([['', 'All places (' + placeKeys.length + ')']].concat(placeKeys.map(function (k) { return [k, placeLabel(k) + ' (' + places[k].count + ')']; }), noPlace ? [['NONE', 'No place given (' + noPlace + ')']] : []), f.loc, 'Place');
+      var groupNames = PROFESSIONS.map(function (g) { return g[0]; }).concat([OTHER_GROUP]).filter(function (n) { return perGroup[n]; });
+      var profPick = select([['', 'All professions']].concat(groupNames.map(function (n) { return [n, n + ' (' + perGroup[n] + ')']; }), noWork ? [['NONE', 'No profession given (' + noWork + ')']] : []), f.prof, 'Profession');
+      var coachPick = select([['', 'All coaches']].concat(Object.keys(perCoach).sort(function (a, b) { return (coachName[a] || '') < (coachName[b] || '') ? -1 : 1; }).map(function (id) { return [id, (coachName[id] || '(unknown)') + ' (' + perCoach[id] + ')']; })), f.coach, 'Coach');
+      var batchPick = select([['', 'All batches']].concat(Object.keys(perBatch).sort(function (a, b) { return (batchNumber(a) || 0) - (batchNumber(b) || 0) || (a < b ? -1 : 1); }).map(function (id) { return [id, batchTitle(id) + ' (' + perBatch[id] + ')']; }), noBatch ? [['NONE', 'No batch (' + noBatch + ')']] : []), f.batch, 'Batch');
+      var sessionFilter = select([['', 'All sessions'], ['MORNING', 'Morning'], ['EVENING', 'Evening'], ['NONE', 'Not set']], f.session, 'Session');
+      var statusPick = select([['ACTIVE', 'Active students'], ['INACTIVE', 'Inactive students'], ['ALL', 'Active and inactive']], f.status, 'Status');
+      var search = el('input', { type: 'search', value: f.q, placeholder: 'Search name, ID, mobile', 'aria-label': 'Search students', autocomplete: 'off' });
+      var info = el('p', { class: 'muted small-line' });
+      var clearFilters = el('button', { text: 'Clear filters', class: 'small ghost' });
+      var rows = el('div');
+      var more = el('p');
+      function matches(st) {
+        if (f.loc && (f.loc === 'NONE' ? placeKey(st.location) : placeKey(st.location) !== f.loc)) return false;
+        if (f.prof && (f.prof === 'NONE' ? professionGroup(st.profession) : professionGroup(st.profession) !== f.prof)) return false;
+        if (f.coach && st.coach_id !== f.coach) return false;
+        if (f.batch && (f.batch === 'NONE' ? st.batch_id : st.batch_id !== f.batch)) return false;
+        if (f.session && (f.session === 'NONE' ? st.session : st.session !== f.session)) return false;
+        if (f.status === 'ACTIVE' && !st.active) return false;
+        if (f.status === 'INACTIVE' && st.active) return false;
+        var q = f.q.trim().toLowerCase();
+        return !q || (st.name + ' ' + st.student_id + ' ' + st.mobile + ' ' + st.profession).toLowerCase().indexOf(q) >= 0;
       }
-      search.addEventListener('input', paint); sessionFilter.addEventListener('change', paint);
-      list.appendChild(el('div', { class: 'row' }, search, sessionFilter)); list.appendChild(rows);
+      function chosen() { return ov.students.filter(matches).sort(function (a, b) { return a.name.toLowerCase() === b.name.toLowerCase() ? (a.student_id < b.student_id ? -1 : 1) : (a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1); }); }
+      function anyFilter() { return !!(f.loc || f.prof || f.coach || f.batch || f.session || f.q.trim() || f.status !== 'ACTIVE'); }
+      function describe() {
+        var parts = [];
+        if (f.loc) parts.push('Place: ' + (f.loc === 'NONE' ? 'none given' : placeLabel(f.loc)));
+        if (f.prof) parts.push('Profession: ' + (f.prof === 'NONE' ? 'none given' : f.prof));
+        if (f.coach) parts.push('Coach: ' + (coachName[f.coach] || ''));
+        if (f.batch) parts.push(f.batch === 'NONE' ? 'No batch' : batchTitle(f.batch));
+        if (f.session) parts.push(f.session === 'NONE' ? 'Session not set' : SESSION_LABEL[f.session] + ' class');
+        if (f.status !== 'ACTIVE') parts.push(f.status === 'ALL' ? 'Active and inactive' : 'Inactive');
+        if (f.q.trim()) parts.push('Search: ' + f.q.trim());
+        return parts.length ? parts.join(' | ') : 'All active students';
+      }
+      function report() {
+        var list = chosen();
+        var slug = f.loc && f.loc !== 'NONE' ? '_' + placeLabel(f.loc).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') : '';
+        return { file: 'students' + slug + '_' + todayString(), sheet: 'Students',
+          title: 'ALP Astrology - Students' + (f.loc && f.loc !== 'NONE' ? ' - ' + placeLabel(f.loc) : ''), subtitle: describe() + '   |   ' + list.length + (list.length === 1 ? ' student' : ' students') + '   |   ' + todayString(),
+          headers: [['Student name', 28], ['Student ID', 16], ['Coach', 24], ['Location', 20], ['Profession', 22], ['Mobile', 16], ['Batch', 10], ['Session', 10], ['Status', 10]],
+          rows: list.map(function (st) { return [st.name, st.student_id, coachName[st.coach_id] || '', st.location, st.profession, st.mobile, st.batch_id, SESSION_LABEL[st.session] || '', st.active ? 'Active' : 'Inactive']; }) };
+      }
+      function paint() {
+        clear(rows); clear(more);
+        var shown = chosen();
+        var visible = shown.slice(0, f.shown);
+        info.textContent = 'Showing ' + visible.length + ' of ' + shown.length + (shown.length === 1 ? ' student' : ' students') + (anyFilter() ? ' (' + ov.students.length + ' in all)' : '');
+        clearFilters.classList.toggle('hidden', !anyFilter());
+        visible.forEach(function (st) {
+          var open = el('button', { text: 'Open', class: 'small' });
+          open.addEventListener('click', function () { openProfile(st.student_id); });
+          rows.appendChild(el('div', { class: 'student compact' },
+            el('span', { class: 'name' }, st.name, idTag(st.student_id), sessionTag(st.session), st.active ? '' : tag('Inactive', 'bad'),
+              el('span', { class: 'muted sub', text: [coachName[st.coach_id] || '', st.batch_id ? 'batch ' + st.batch_id : 'no batch', st.mobile, st.location, st.profession].filter(Boolean).join(' - ') })), open));
+        });
+        if (!shown.length) rows.appendChild(el('p', { class: 'empty', text: ov.students.length ? 'Nobody matches these filters.' : 'No students yet.' }));
+        if (shown.length > visible.length) {
+          var showMore = el('button', { text: 'Show ' + Math.min(40, shown.length - visible.length) + ' more (' + (shown.length - visible.length) + ' left)' });
+          showMore.addEventListener('click', function () { f.shown += 40; paint(); });
+          more.appendChild(showMore);
+        }
+      }
+      [[locPick, 'loc'], [profPick, 'prof'], [coachPick, 'coach'], [batchPick, 'batch'], [sessionFilter, 'session'], [statusPick, 'status']].forEach(function (pair) {
+        pair[0].addEventListener('change', function () { f[pair[1]] = pair[0].value; f.shown = 40; paint(); });
+      });
+      search.addEventListener('input', function () { f.q = search.value; f.shown = 40; paint(); });
+      clearFilters.addEventListener('click', function () { f.loc = ''; f.prof = ''; f.coach = ''; f.batch = ''; f.session = ''; f.status = 'ACTIVE'; f.q = ''; f.shown = 40; [locPick, profPick, coachPick, batchPick, sessionFilter].forEach(function (x) { x.value = ''; }); statusPick.value = 'ACTIVE'; search.value = ''; paint(); });
+      list.appendChild(el('p', { class: 'muted', text: 'Choose a place (for example Chennai) or a profession group to see, and download, only those students. Every filter also applies to the Excel and PDF report.' }));
+      list.appendChild(el('div', { class: 'filters stu' }, locPick, profPick, coachPick, batchPick, sessionFilter, statusPick, search));
+      list.appendChild(el('div', { class: 'row-between' }, info, clearFilters));
+      list.appendChild(exportBar(report));
+      list.appendChild(rows); list.appendChild(more);
       body.appendChild(list);
+      body.appendChild(add);
+      body.appendChild(importCard);
       paint();
     });
   }
@@ -1091,6 +1247,17 @@
       });
       many.appendChild(lines); many.appendChild(el('p', null, manyButton));
       body.appendChild(many);
+      var counts = {};
+      ov.students.forEach(function (st) { if (st.active) counts[st.coach_id] = (counts[st.coach_id] || 0) + 1; });
+      var roleReport = select([['', 'Everyone'], ['COACH', 'Coaches only'], ['ADMIN', 'Admins only']], '', 'Who to include');
+      var teamCard = el('div', { class: 'card' }, el('h2', { text: 'Report' }), el('p', { class: 'muted', text: 'Name, login name, role, mobile, status and the number of active students, as Excel or PDF.' }), el('div', { class: 'row' }, roleReport),
+        exportBar(function () {
+          var list = ov.people.filter(function (p) { return !roleReport.value || p.role === roleReport.value; }).sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; });
+          return { file: 'people_' + todayString(), sheet: 'People', title: 'ALP Astrology - ' + (roleReport.value === 'COACH' ? 'Coaches' : roleReport.value === 'ADMIN' ? 'Admins' : 'People'), subtitle: list.length + ' people   |   ' + todayString(),
+            headers: [['Name', 28], ['Login name', 22], ['Role', 10], ['Mobile', 16], ['Status', 10], ['Active students', 16]],
+            rows: list.map(function (p) { return [p.name, p.username, p.role === 'ADMIN' ? 'Admin' : 'Coach', p.mobile, p.active ? 'Active' : 'Inactive', p.role === 'COACH' ? String(counts[p.user_id] || 0) : '']; }) };
+        }));
+      body.appendChild(teamCard);
       var list = el('div', { class: 'card' }, el('h2', { text: 'People' }));
       ov.people.forEach(function (person) {
         var resetInput = el('input', { placeholder: 'New PIN', 'aria-label': 'New PIN for ' + person.name, inputmode: 'numeric' });
@@ -1268,20 +1435,34 @@
     body.appendChild(card);
   }
   function printReport(data) {
+    printTable('ALP Astrology - Attendance report', data.from + ' to ' + data.to + '   |   Present ' + data.summary.PRESENT + ', Absent ' + data.summary.ABSENT + ', Excused ' + data.summary.EXCUSED + ', Not recorded ' + data.summary.NOT_RECORDED,
+      COLUMNS.map(function (c) { return c[0]; }), data.rows.map(function (row) { return COLUMNS.map(function (c) { return cellText(row, c[1]); }); }));
+  }
+  // Any table as a printable page (the browser's "Save as PDF").
+  function printTable(title, subtitle, headers, rows) {
     var view = $('printView'); clear(view);
-    view.appendChild(el('h1', { text: 'ALP Astrology - Attendance report' }));
-    view.appendChild(el('p', { text: data.from + ' to ' + data.to + '   |   Present ' + data.summary.PRESENT + ', Absent ' + data.summary.ABSENT + ', Excused ' + data.summary.EXCUSED + ', Not recorded ' + data.summary.NOT_RECORDED }));
+    view.appendChild(el('h1', { text: title }));
+    view.appendChild(el('p', { text: subtitle }));
     var table = el('table');
     var headRow = el('tr');
-    COLUMNS.forEach(function (c) { headRow.appendChild(el('th', { text: c[0] })); });
+    headers.forEach(function (h) { headRow.appendChild(el('th', { text: h })); });
     table.appendChild(headRow);
-    data.rows.forEach(function (row) {
+    rows.forEach(function (cells) {
       var tr = el('tr');
-      COLUMNS.forEach(function (c) { tr.appendChild(el('td', { text: cellText(row, c[1]) })); });
+      cells.forEach(function (value) { tr.appendChild(el('td', { text: value })); });
       table.appendChild(tr);
     });
     view.appendChild(table);
     setTimeout(function () { window.print(); }, 100);
+  }
+  // Excel and PDF buttons for a report: makeReport() returns { file, sheet, title, subtitle, headers: [[heading, width]], rows } for what is on the screen now.
+  function exportBar(makeReport) {
+    var excel = el('button', { text: 'Download Excel (.xlsx)', class: 'primary' });
+    var pdf = el('button', { text: 'Download PDF' });
+    function report() { var r = makeReport(); if (!r.rows.length) { banner('error', 'There is nothing to export with these filters.'); return null; } return r; }
+    excel.addEventListener('click', function () { var r = report(); if (r) { download(r.file + '.xlsx', makeSheetXlsx(r.headers, r.rows, r.sheet)); banner('info', 'Excel file downloaded (' + r.rows.length + ' rows).'); } });
+    pdf.addEventListener('click', function () { var r = report(); if (r) printTable(r.title, r.subtitle, r.headers.map(function (h) { return h[0]; }), r.rows); });
+    return el('div', { class: 'exportbar' }, excel, pdf);
   }
 
   // A small .xlsx writer: an Excel file is a zip of XML files (stored, not compressed). No outside library is needed.
@@ -1305,19 +1486,23 @@
   function xml(text) { return String(text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function columnName(i) { return String.fromCharCode(65 + i); }
   function makeXlsx(data) {
+    return makeSheetXlsx(COLUMNS.map(function (c) { return [c[0], c[2]]; }), data.rows.map(function (row) { return COLUMNS.map(function (c) { return cellText(row, c[1]); }); }), 'Attendance');
+  }
+  // Any table as an Excel file: columns are [heading, width], rows are lists of text (never formulas).
+  function makeSheetXlsx(columns, matrix, sheetName) {
     var NS = 'h' + 'ttp://schemas.openxmlformats.org/';                                 // the namespace is an identifier, not a download
-    var rows = [COLUMNS.map(function (c) { return c[0]; })].concat(data.rows.map(function (row) { return COLUMNS.map(function (c) { return cellText(row, c[1]); }); }));
+    var rows = [columns.map(function (c) { return c[0]; })].concat(matrix);
     var sheetRows = rows.map(function (cells, r) {
       return '<row r="' + (r + 1) + '">' + cells.map(function (value, c) {
         return '<c r="' + columnName(c) + (r + 1) + '" t="inlineStr"' + (r === 0 ? ' s="1"' : '') + '><is><t>' + xml(value) + '</t></is></c>';       // text only, so no cell is ever a formula
       }).join('') + '</row>';
     }).join('');
-    var cols = '<cols>' + COLUMNS.map(function (c, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + c[2] + '" customWidth="1"/>'; }).join('') + '</cols>';
+    var cols = '<cols>' + columns.map(function (c, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + c[1] + '" customWidth="1"/>'; }).join('') + '</cols>';
     var head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
     return zip([
       ['[Content_Types].xml', head + '<Types xmlns="' + NS + 'package/2006/content-types' + '"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
       ['_rels/.rels', head + '<Relationships xmlns="' + NS + 'package/2006/relationships"><Relationship Id="rId1" Type="' + NS + 'officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
-      ['xl/workbook.xml', head + '<workbook xmlns="' + NS + 'spreadsheetml/2006/main" xmlns:r="' + NS + 'officeDocument/2006/relationships"><sheets><sheet name="Attendance" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+      ['xl/workbook.xml', head + '<workbook xmlns="' + NS + 'spreadsheetml/2006/main" xmlns:r="' + NS + 'officeDocument/2006/relationships"><sheets><sheet name="' + xml(sheetName) + '" sheetId="1" r:id="rId1"/></sheets></workbook>'],
       ['xl/_rels/workbook.xml.rels', head + '<Relationships xmlns="' + NS + 'package/2006/relationships"><Relationship Id="rId1" Type="' + NS + 'officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="' + NS + 'officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
       ['xl/styles.xml', head + '<styleSheet xmlns="' + NS + 'spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
       ['xl/worksheets/sheet1.xml', head + '<worksheet xmlns="' + NS + 'spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' + cols + '<sheetData>' + sheetRows + '</sheetData></worksheet>']
