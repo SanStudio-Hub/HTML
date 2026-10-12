@@ -205,6 +205,24 @@
   .bulk select { flex: 1 1 140px; }
   .sess-pick { justify-content: space-between; }
   .sess-pick select { flex: 1 1 60%; }
+  .datebar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+  .datebar input { width: 100%; }
+  .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 8px; }
+  .filters select, .filters input { width: 100%; }
+  .filters select:first-child { grid-column: 1 / -1; }
+  .att .seg button { min-height: 44px; }
+  .att .coach-row { padding: 12px 0; gap: 8px; }
+  .filters input[type=search] { grid-column: 1 / -1; margin: 0; }
+  @media (min-width: 701px) { .filters { grid-template-columns: repeat(4, minmax(0, 1fr)); } .filters input[type=search], .filters select:first-child { grid-column: auto; } }
+  .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+  .fchip { min-height: 40px; padding: 6px 12px; border-radius: 999px; font-size: .88rem; }
+  .fchip b { margin-left: 6px; font-weight: 700; }
+  .fchip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .fchip.on.PRESENT { background: var(--ok); border-color: var(--ok); }
+  .fchip.on.ABSENT { background: var(--bad); border-color: var(--bad); }
+  .fchip.on.EXCUSED { background: var(--warn); border-color: var(--warn); }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .row-between p { margin: 4px 0; }
   .confirm { margin-top: 6px; }
   .warn-text { margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: #fbeceb; color: var(--bad); font-weight: 600; }
   h3.group { margin: 14px 0 6px; font-size: .95rem; color: var(--accent-dark); }
@@ -432,7 +450,7 @@
   function shortIds(ids) { return ids.length > 6 ? ids.slice(0, 6).join(', ') + ' and ' + (ids.length - 6) + ' more' : ids.join(', '); }
 
   // ------------------------------------------------------------------ app shell: tabs, navigation
-  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {} };
+  var nav = { tab: '', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null };
 
   function signedOut() {
     saveToken(''); me = null;
@@ -450,7 +468,7 @@
     $('avatar').textContent = (me.name || '?').trim().charAt(0).toUpperCase();
     $('roleLine').textContent = isAdmin() ? 'Administrator' : 'Coach';
     if (me.mustChange) { showPinGate(); return; }
-    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {} };
+    nav = { tab: isAdmin() ? 'home' : 'today', profile: '', back: '', session: '', compare: '', openBatches: {}, att: null };
     render();
   }
   // A PIN chosen by an administrator is temporary: nothing else works until the person has chosen their own.
@@ -1108,39 +1126,114 @@
 
   function todayString() { return new Date(Date.now() + 19800000).toISOString().slice(0, 10); }      // India time (UTC+05:30)
 
-  function renderReport(body, date) {
-    var card = el('div', { class: 'card' });
-    var dateInput = el('input', { type: 'date', value: date, 'aria-label': 'Date' });
-    var loadButton = el('button', { text: 'Show', class: 'primary' });
-    var out = el('div');
-    card.appendChild(el('div', { class: 'row' }, dateInput, loadButton));
-    card.appendChild(out);
+  // The attendance screen: pick a day, then narrow the list by coach, batch, session, status or a name / ID, all on the data already loaded.
+  function renderReport(body, today) {
+    if (!nav.att) nav.att = { date: today, coach: '', batch: '', session: '', status: '', q: '', shown: 40 };
+    var f = nav.att;
+    var card = el('div', { class: 'card att' }, el('h2', { text: 'Attendance' }));
+    var dateInput = el('input', { type: 'date', value: f.date, max: today, 'aria-label': 'Date' });
+    var prev = el('button', { text: '<', class: 'small', 'aria-label': 'Previous day' });
+    var next = el('button', { text: '>', class: 'small', 'aria-label': 'Next day' });
+    var jump = el('button', { text: 'Today', class: 'small' });
+    var panel = el('div');
+    card.appendChild(el('div', { class: 'datebar' }, prev, dateInput, next, jump));
+    card.appendChild(panel);
     body.appendChild(card);
+    function setDate(value) { if (!value || value > today) return; f.date = value; f.shown = 40; load(); }
+    function shift(days) { setDate(new Date(Date.parse(f.date + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10)); }
+    prev.addEventListener('click', function () { shift(-1); });
+    next.addEventListener('click', function () { shift(1); });
+    jump.addEventListener('click', function () { setDate(today); });
+    dateInput.addEventListener('change', function () { setDate(dateInput.value); });
     function load() {
-      guarded(api('api_attendanceReport', token, dateInput.value), function (report) {
-        clear(out);
-        var summary = el('div', { class: 'stats' });
-        [['PRESENT', 'Present'], ['ABSENT', 'Absent'], ['EXCUSED', 'Excused'], ['NOT_RECORDED', 'Not recorded']].forEach(function (pair) {
-          summary.appendChild(el('div', { class: 'stat ' + pair[0] }, el('b', { text: String(report.summary[pair[0]]) }), el('span', { text: pair[1] })));
-        });
-        out.appendChild(summary);
-        var table = el('table', { class: 'resp' });
-        table.appendChild(el('tr', { class: 'head' }, el('th', { text: 'ID' }), el('th', { text: 'Student' }), el('th', { text: 'Session' }), el('th', { text: 'Coach' }), el('th', { text: 'Status' }), el('th', { text: 'Marked by' })));
-        report.rows.forEach(function (row) {
-          var select = el('select', { 'aria-label': 'Status for ' + row.student });
-          [['', 'Not recorded']].concat(['PRESENT', 'ABSENT', 'EXCUSED'].map(function (s) { return [s, STATUS_LABEL[s]]; })).forEach(function (opt) {
-            select.appendChild(el('option', { value: opt[0], text: opt[1], selected: opt[0] === row.status }));
-          });
-          select.addEventListener('change', function () {
-            if (!select.value) { select.value = row.status; banner('error', 'An entry can be changed but not removed.'); return; }
-            guarded(api('api_adminSetAttendance', token, report.date, row.student_id, select.value), function () { banner('info', 'Saved.'); load(); });
-          });
-          table.appendChild(el('tr', null, el('td', { text: row.student_id, class: 'muted', 'data-label': 'ID' }), el('td', { text: row.student, 'data-label': 'Student' }), el('td', { text: SESSION_LABEL[row.session] || '-', class: 'muted', 'data-label': 'Session' }), el('td', { text: row.coach, 'data-label': 'Coach' }), el('td', { 'data-label': 'Status' }, select), el('td', { class: 'muted', text: row.marked_by, 'data-label': 'Marked by' })));
-        });
-        out.appendChild(el('div', { class: 'scroll' }, table));
-      });
+      dateInput.value = f.date; next.disabled = f.date >= today;
+      guarded(api('api_attendanceReport', token, f.date), function (report) { build(report); });
     }
-    loadButton.addEventListener('click', load);
+    function build(report) {
+      clear(panel);
+      var rows = report.rows;
+      var perCoach = {}, perBatch = {}, hasNoBatch = false;
+      rows.forEach(function (r) { perCoach[r.coach_id] = perCoach[r.coach_id] || { name: r.coach, count: 0 }; perCoach[r.coach_id].count++; if (r.batch_id) perBatch[r.batch_id] = (perBatch[r.batch_id] || 0) + 1; else hasNoBatch = true; });
+      if (f.coach && !perCoach[f.coach]) f.coach = '';
+      if (f.batch && f.batch !== 'NONE' && !perBatch[f.batch]) f.batch = '';
+      var coachOptionsList = [['', 'All coaches (' + Object.keys(perCoach).length + ')']].concat(Object.keys(perCoach).sort(function (a, b) { return perCoach[a].name < perCoach[b].name ? -1 : 1; })
+        .map(function (id) { return [id, perCoach[id].name + ' (' + perCoach[id].count + ')']; }));
+      var batchOptionsList = [['', 'All batches']].concat(Object.keys(perBatch).sort(function (a, b) { return (batchNumber(a) || 0) - (batchNumber(b) || 0) || (a < b ? -1 : 1); })
+        .map(function (id) { return [id, batchTitle(id) + ' (' + perBatch[id] + ')']; }), hasNoBatch ? [['NONE', 'No batch']] : []);
+      var coachPick = select(coachOptionsList, f.coach, 'Coach');
+      var batchPick = select(batchOptionsList, f.batch, 'Batch');
+      var sessionPick = select([['', 'All sessions'], ['MORNING', 'Morning'], ['EVENING', 'Evening'], ['NONE', 'Not set']], f.session, 'Session');
+      var search = el('input', { type: 'search', value: f.q, placeholder: 'Student name or ID', 'aria-label': 'Search by student name or ID', autocomplete: 'off' });
+      var chips = el('div', { class: 'fchips', role: 'group', 'aria-label': 'Attendance status' });
+      var info = el('p', { class: 'muted small-line' });
+      var clearFilters = el('button', { text: 'Clear filters', class: 'small ghost' });
+      var list = el('div');
+      var more = el('p');
+      panel.appendChild(el('div', { class: 'filters' }, coachPick, batchPick, sessionPick, search));
+      panel.appendChild(chips); panel.appendChild(el('div', { class: 'row-between' }, info, clearFilters)); panel.appendChild(list); panel.appendChild(more);
+
+      function matches(r, withStatus) {
+        if (f.coach && r.coach_id !== f.coach) return false;
+        if (f.batch && (f.batch === 'NONE' ? r.batch_id : r.batch_id !== f.batch)) return false;
+        if (f.session && (f.session === 'NONE' ? r.session : r.session !== f.session)) return false;
+        var q = f.q.trim().toLowerCase();
+        if (q && (r.student + ' ' + r.student_id).toLowerCase().indexOf(q) < 0) return false;
+        if (withStatus && f.status && (r.status || 'NOT_RECORDED') !== f.status) return false;
+        return true;
+      }
+      function anyFilter() { return !!(f.coach || f.batch || f.session || f.status || f.q.trim()); }
+      function attRow(r) {
+        var buttons = el('div', { class: 'seg' });
+        ['PRESENT', 'ABSENT', 'EXCUSED'].forEach(function (status) {
+          var b = el('button', { text: STATUS_LABEL[status], class: r.status === status ? 'on-' + status : '', 'aria-pressed': r.status === status ? 'true' : 'false' });
+          b.addEventListener('click', function () {
+            if (r.status === status) return;
+            buttons.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+            guarded(api('api_adminSetAttendance', token, f.date, r.student_id, status), function () {
+              r.status = status; r.marked_by = me.name; banner('info', 'Saved: ' + r.student + ' - ' + STATUS_LABEL[status]); paint();
+            }).then(function () { buttons.querySelectorAll('button').forEach(function (x) { x.disabled = false; }); });
+          });
+          buttons.appendChild(b);
+        });
+        return el('div', { class: 'coach-row' },
+          el('div', null, el('span', { class: 'name' }, r.student, idTag(r.student_id)),
+            el('p', { class: 'meta' }, batchTag(r.batch_id), sessionTag(r.session),
+              r.status ? el('span', { class: 'muted', text: r.marked_by ? 'Marked by ' + r.marked_by : '' }) : tag('Not recorded', 'warn'))),
+          buttons);
+      }
+      function paint() {
+        clear(chips); clear(list); clear(more);
+        var base = rows.filter(function (r) { return matches(r, false); });
+        var counts = { PRESENT: 0, ABSENT: 0, EXCUSED: 0, NOT_RECORDED: 0 };
+        base.forEach(function (r) { counts[r.status || 'NOT_RECORDED']++; });
+        [['', 'All', base.length], ['PRESENT', 'Present', counts.PRESENT], ['ABSENT', 'Absent', counts.ABSENT], ['EXCUSED', 'Excused', counts.EXCUSED], ['NOT_RECORDED', 'Not recorded', counts.NOT_RECORDED]].forEach(function (c) {
+          var chip = el('button', { class: 'fchip' + (f.status === c[0] ? ' on ' + c[0] : ''), 'aria-pressed': f.status === c[0] ? 'true' : 'false' }, c[1], el('b', { text: String(c[2]) }));
+          chip.addEventListener('click', function () { f.status = c[0]; f.shown = 40; paint(); });
+          chips.appendChild(chip);
+        });
+        var shown = base.filter(function (r) { return matches(r, true); });
+        var visible = shown.slice(0, f.shown);
+        info.textContent = rows.length ? 'Showing ' + visible.length + ' of ' + shown.length + (shown.length !== rows.length ? ' (' + rows.length + ' students in all)' : ' students') : '';
+        clearFilters.classList.toggle('hidden', !anyFilter());
+        var lastCoach = null;
+        visible.forEach(function (r) {
+          if (!f.coach && r.coach_id !== lastCoach) { lastCoach = r.coach_id; list.appendChild(el('h3', { class: 'group', text: r.coach })); }      // one heading per coach when all coaches are shown
+          list.appendChild(attRow(r));
+        });
+        if (!shown.length) list.appendChild(el('p', { class: 'empty', text: rows.length ? 'Nobody matches these filters.' : 'No students for this day.' }));
+        if (shown.length > visible.length) {
+          var showMore = el('button', { text: 'Show ' + Math.min(40, shown.length - visible.length) + ' more (' + (shown.length - visible.length) + ' left)' });
+          showMore.addEventListener('click', function () { f.shown += 40; paint(); });
+          more.appendChild(showMore);
+        }
+      }
+      coachPick.addEventListener('change', function () { f.coach = coachPick.value; f.shown = 40; paint(); });
+      batchPick.addEventListener('change', function () { f.batch = batchPick.value; f.shown = 40; paint(); });
+      sessionPick.addEventListener('change', function () { f.session = sessionPick.value; f.shown = 40; paint(); });
+      search.addEventListener('input', function () { f.q = search.value; f.shown = 40; paint(); });
+      clearFilters.addEventListener('click', function () { f.coach = ''; f.batch = ''; f.session = ''; f.status = ''; f.q = ''; f.shown = 40; build(report); });
+      paint();
+    }
     load();
   }
 
